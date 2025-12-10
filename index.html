@@ -380,8 +380,8 @@
                     vec2 center = vec2(0.5);
                     float dist = distance(uv, center);
 
-                    // Dynamic chromatic aberration
-                    float aberration = 0.001 + dist * 0.002 + sin(time * 0.5) * 0.0005;
+                    // Static chromatic aberration (no time-based calculation)
+                    float aberration = 0.001 + dist * 0.002;
                     vec2 dir = normalize(uv - center);
 
                     float r = texture2D(tDiffuse, uv + dir * aberration).r;
@@ -390,27 +390,9 @@
 
                     vec3 color = vec3(r, g, b);
 
-                    // Color grading - boost cyans and magentas
-                    color.r *= 0.95;
-                    color.g *= 1.05;
-                    color.b *= 1.1;
-
-                    // Vignette with color tint
-                    float vignette = 1.0 - dist * 0.7;
-                    vignette = smoothstep(0.0, 1.0, vignette);
+                    // Vignette only (removed color grading, scanlines, grain)
+                    float vignette = 1.0 - dist * 0.6;
                     color *= vignette;
-                    color += vec3(0.0, 0.02, 0.04) * (1.0 - vignette); // Blue tint in corners
-
-                    // Subtle scanlines
-                    float scanline = sin(uv.y * resolution.y * 0.5 + time * 2.0) * 0.015 + 1.0;
-                    color *= scanline;
-
-                    // Film grain
-                    float grain = (fract(sin(dot(uv * time, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.025;
-                    color += grain;
-
-                    // Slight contrast boost
-                    color = pow(color, vec3(0.95));
 
                     gl_FragColor = vec4(color, 1.0);
                 }
@@ -533,9 +515,8 @@
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;
 
-            // Enable shadows (r182 improved shadow mapping)
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            // Shadows disabled for performance
+            renderer.shadowMap.enabled = false;
 
             // Post-processing
             setupPostProcessing();
@@ -563,6 +544,7 @@
             createEntities();
             createLatentParticles();
             createDataStreams();
+            createBinaryParticles();
             createGridFloor();
 
             // Lighting
@@ -772,7 +754,6 @@
                 roughness: 0.15
             });
             const core = new THREE.Mesh(coreGeometry, coreMaterial);
-            core.castShadow = true;
             coreGroup.add(core);
 
             // Inner glow - optimized
@@ -1084,6 +1065,104 @@
             scene.add(dataStreams);
         }
 
+        let binaryParticles;
+
+        function createBinaryTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = 'black';
+            ctx.font = 'bold 48px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(Math.random() > 0.5 ? '0' : '1', 32, 32);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        function createBinaryParticles() {
+            const count = 150;
+            const binaryGroup = new THREE.Group();
+            const binaryData = [];
+
+            // Create shared textures for 0 and 1
+            const tex0 = createBinaryTextureChar('0');
+            const tex1 = createBinaryTextureChar('1');
+
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 6;
+                const y = (Math.random() - 0.5) * 3;
+
+                const material = new THREE.SpriteMaterial({
+                    map: Math.random() > 0.5 ? tex0 : tex1,
+                    transparent: true,
+                    opacity: 0.15 + Math.random() * 0.2,
+                    depthWrite: false
+                });
+
+                const sprite = new THREE.Sprite(material);
+                const scale = 0.08 + Math.random() * 0.12;
+                sprite.scale.set(scale, scale, 1);
+                sprite.position.set(
+                    Math.cos(angle) * radius,
+                    y,
+                    Math.sin(angle) * radius
+                );
+
+                binaryData.push({
+                    sprite: sprite,
+                    angle: angle,
+                    radius: radius,
+                    y: y,
+                    speed: 0.02 + Math.random() * 0.04,
+                    ySpeed: (Math.random() - 0.5) * 0.01,
+                    yBase: y
+                });
+
+                binaryGroup.add(sprite);
+            }
+
+            binaryParticles = { group: binaryGroup, data: binaryData };
+            scene.add(binaryGroup);
+        }
+
+        function createBinaryTextureChar(char) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = 'black';
+            ctx.font = 'bold 28px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(char, 16, 16);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        function updateBinaryParticles(delta) {
+            if (!binaryParticles) return;
+
+            binaryParticles.data.forEach(b => {
+                b.angle += b.speed * delta;
+                b.y = b.yBase + Math.sin(time * 0.5 + b.angle) * 0.3;
+
+                b.sprite.position.set(
+                    Math.cos(b.angle) * b.radius,
+                    b.y,
+                    Math.sin(b.angle) * b.radius
+                );
+            });
+        }
+
         function createGridFloor() {
             const gridGroup = new THREE.Group();
 
@@ -1138,25 +1217,19 @@
         }
 
         function createLighting() {
-            // Ambient light with subtle color
-            const ambient = new THREE.AmbientLight(0x0a0a1a, 0.8);
+            // Ambient light - increased to compensate for fewer lights
+            const ambient = new THREE.AmbientLight(0x0a0a1a, 1.0);
             scene.add(ambient);
 
-            // Core point light with shadows
-            coreLight = new THREE.PointLight(0xff0044, 1.5, 15);
+            // Core point light - no shadows for performance
+            coreLight = new THREE.PointLight(0xff0044, 2.0, 15);
             coreLight.position.set(0, 0, 0);
-            coreLight.castShadow = true;
-            coreLight.shadow.mapSize.width = 512;
-            coreLight.shadow.mapSize.height = 512;
-            coreLight.shadow.radius = 4;
             scene.add(coreLight);
 
-            // Realm accent lights
+            // Reduced realm lights (2 instead of 4)
             const realmLights = [
-                { color: 0x4a9eff, radius: 2.4, intensity: 1.5 },
-                { color: 0x00ff88, radius: 4.0, intensity: 1.2 },
-                { color: 0xff00ff, radius: 5.6, intensity: 1.0 },
-                { color: 0x8844ff, radius: 7.5, intensity: 0.8 }
+                { color: 0x4a9eff, radius: 4.0, intensity: 1.8 },
+                { color: 0xff00ff, radius: 7.0, intensity: 1.2 }
             ];
 
             realmLights.forEach((light, i) => {
@@ -1166,7 +1239,7 @@
             });
 
             // Hemisphere light for better ambient
-            const hemiLight = new THREE.HemisphereLight(0x0a0a2a, 0x000000, 0.5);
+            const hemiLight = new THREE.HemisphereLight(0x0a0a2a, 0x000000, 0.6);
             scene.add(hemiLight);
         }
 
@@ -1532,7 +1605,11 @@
             controls.update();
 
             updateEntities(delta);
-            updateParticles(delta);
+            // Throttle particle updates to every 2nd frame
+            if (frameNumber % 2 === 0) {
+                updateParticles(delta * 2);
+                updateBinaryParticles(delta * 2);
+            }
             updateConnections();
             updateMatrixCore();
             updateRealmRings();
