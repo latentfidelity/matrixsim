@@ -157,6 +157,30 @@
             color: #0ff;
             font-family: 'Courier New', monospace;
         }
+
+        #wombo-badge {
+            position: fixed;
+            top: 50px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #wombo-badge img {
+            width: 32px;
+            height: 32px;
+            mix-blend-mode: lighten;
+        }
+
+        #wombo-badge span {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #fff;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -164,6 +188,10 @@
 
     <div id="title">DIGITAL <span>REALM</span> SIMULATION</div>
     <div id="fps">FPS: 60</div>
+    <div id="wombo-badge">
+        <img src="wombo.png" alt="WOMBO">
+        <span>WOMBO Research</span>
+    </div>
 
     <div class="ui-panel" id="legend">
         <h2>Legend</h2>
