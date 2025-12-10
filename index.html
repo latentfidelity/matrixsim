@@ -258,9 +258,9 @@
                 agents: 10
             },
             particles: {
-                latentCount: 1500,
-                dataStreamCount: 300,
-                nebulaCount: 2000
+                latentCount: 800,
+                dataStreamCount: 200,
+                nebulaCount: 800
             }
         };
 
@@ -432,7 +432,7 @@
                     float dist = length(center);
                     float alpha = exp(-dist * dist * 8.0); // Gaussian falloff
                     alpha *= vAlpha;
-                    gl_FragColor = vec4(vColor * 0.6, alpha * 0.15);
+                    gl_FragColor = vec4(vColor * 0.4, alpha * 0.04);
                 }
             `
         };
@@ -543,12 +543,12 @@
             gtaoPass.enabled = true;
             composer.addPass(gtaoPass);
 
-            // Bloom - subtle glow only
+            // Bloom - very subtle
             const bloomPass = new UnrealBloomPass(
                 new THREE.Vector2(window.innerWidth, window.innerHeight),
-                0.15,  // strength - much reduced
-                0.2,   // radius
-                0.95   // threshold - higher = less bloom
+                0.08,  // strength - minimal
+                0.15,  // radius
+                0.97   // threshold - very high = minimal bloom
             );
             composer.addPass(bloomPass);
 
@@ -972,7 +972,7 @@
                         float dist = length(center);
                         float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
                         alpha = pow(alpha, 1.5);
-                        gl_FragColor = vec4(vColor * 0.7, alpha * 0.35);
+                        gl_FragColor = vec4(vColor * 0.5, alpha * 0.2);
                     }
                 `,
                 transparent: true,
