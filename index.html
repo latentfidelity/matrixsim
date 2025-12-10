@@ -1100,9 +1100,11 @@
 
                 const material = new THREE.SpriteMaterial({
                     map: Math.random() > 0.5 ? tex0 : tex1,
+                    color: 0x000000,
                     transparent: true,
-                    opacity: 0.15 + Math.random() * 0.2,
-                    depthWrite: false
+                    opacity: 0.4 + Math.random() * 0.3,
+                    depthWrite: false,
+                    alphaTest: 0.05
                 });
 
                 const sprite = new THREE.Sprite(material);
@@ -1137,19 +1139,28 @@
             canvas.height = 128;
             const ctx = canvas.getContext('2d', { alpha: true });
 
-            // Ensure transparent background
+            // Clear canvas
             ctx.clearRect(0, 0, 128, 128);
 
-            // Enable anti-aliasing for text
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-
-            // Draw black text with good visibility
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 96px monospace';
+            // Draw WHITE text - we'll colorize it black via material.color
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 100px monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(char, 64, 68);
+
+            // Get image data and set alpha from luminance
+            const imageData = ctx.getImageData(0, 0, 128, 128);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                // Use red channel as alpha (white text = high alpha)
+                const alpha = data[i];
+                data[i] = 255;     // R - will be tinted by material color
+                data[i + 1] = 255; // G
+                data[i + 2] = 255; // B
+                data[i + 3] = alpha; // A - from original luminance
+            }
+            ctx.putImageData(imageData, 0, 0);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.premultiplyAlpha = false;
