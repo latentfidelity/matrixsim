@@ -1133,17 +1133,26 @@
 
         function createBinaryTextureChar(char) {
             const canvas = document.createElement('canvas');
-            canvas.width = 32;
-            canvas.height = 32;
-            const ctx = canvas.getContext('2d');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d', { alpha: true });
 
-            ctx.fillStyle = 'black';
-            ctx.font = 'bold 28px monospace';
+            // Ensure transparent background
+            ctx.clearRect(0, 0, 128, 128);
+
+            // Enable anti-aliasing for text
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // Draw black text with good visibility
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 96px monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(char, 16, 16);
+            ctx.fillText(char, 64, 68);
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.premultiplyAlpha = false;
             texture.needsUpdate = true;
             return texture;
         }
