@@ -221,7 +221,7 @@
         Drag to rotate • Scroll to zoom • Double-click to reset
     </div>
 
-    <!-- Three.js and dependencies -->
+    <!-- Three.js r182 and dependencies -->
     <script type="importmap">
     {
         "imports": {
@@ -238,7 +238,8 @@
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-        import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+        import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
         // ============================================
         // CONFIGURATION
@@ -257,8 +258,9 @@
                 agents: 10
             },
             particles: {
-                latentCount: 1000,
-                dataStreamCount: 200
+                latentCount: 1500,
+                dataStreamCount: 300,
+                nebulaCount: 2000
             }
         };
 
@@ -287,11 +289,12 @@
                 void main() {
                     float angle = atan(vPosition.y, vPosition.x);
                     float wave = sin(angle * 20.0 + time * 2.0) * 0.5 + 0.5;
+                    float wave2 = sin(angle * 8.0 - time * 1.5) * 0.3 + 0.7;
                     float pulse = sin(time * 3.0) * 0.3 + 0.7;
-                    float intensity = wave * 0.3 + 0.7;
+                    float intensity = wave * wave2 * 0.4 + 0.6;
                     intensity *= pulse;
 
-                    vec3 finalColor = color * intensity;
+                    vec3 finalColor = color * intensity * 1.2;
                     float alpha = opacity * (0.6 + wave * 0.4);
 
                     gl_FragColor = vec4(finalColor, alpha);
@@ -299,34 +302,7 @@
             `
         };
 
-        // Entity glow shader
-        const EntityGlowShader = {
-            vertexShader: `
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-            `,
-            fragmentShader: `
-                uniform vec3 color;
-                uniform float time;
-                uniform float intensity;
-                varying vec2 vUv;
-
-                void main() {
-                    vec2 center = vec2(0.5, 0.5);
-                    float dist = distance(vUv, center);
-                    float pulse = sin(time * 4.0) * 0.2 + 0.8;
-                    float glow = 1.0 - smoothstep(0.0, 0.5, dist);
-                    glow = pow(glow, 2.0) * intensity * pulse;
-
-                    gl_FragColor = vec4(color, glow);
-                }
-            `
-        };
-
-        // Chromatic aberration + vignette post-process
+        // Enhanced chromatic aberration + vignette + color grading
         const ChromaticAberrationShader = {
             uniforms: {
                 tDiffuse: { value: null },
@@ -346,13 +322,22 @@
                 uniform float time;
                 varying vec2 vUv;
 
+                vec3 aces(vec3 x) {
+                    const float a = 2.51;
+                    const float b = 0.03;
+                    const float c = 2.43;
+                    const float d = 0.59;
+                    const float e = 0.14;
+                    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+                }
+
                 void main() {
                     vec2 uv = vUv;
                     vec2 center = vec2(0.5);
                     float dist = distance(uv, center);
 
-                    // Chromatic aberration (subtle)
-                    float aberration = 0.0005 + dist * 0.001;
+                    // Dynamic chromatic aberration
+                    float aberration = 0.001 + dist * 0.002 + sin(time * 0.5) * 0.0005;
                     vec2 dir = normalize(uv - center);
 
                     float r = texture2D(tDiffuse, uv + dir * aberration).r;
@@ -361,25 +346,34 @@
 
                     vec3 color = vec3(r, g, b);
 
-                    // Vignette
-                    float vignette = 1.0 - dist * 0.8;
+                    // Color grading - boost cyans and magentas
+                    color.r *= 0.95;
+                    color.g *= 1.05;
+                    color.b *= 1.1;
+
+                    // Vignette with color tint
+                    float vignette = 1.0 - dist * 0.7;
                     vignette = smoothstep(0.0, 1.0, vignette);
                     color *= vignette;
+                    color += vec3(0.0, 0.02, 0.04) * (1.0 - vignette); // Blue tint in corners
 
                     // Subtle scanlines
-                    float scanline = sin(uv.y * resolution.y * 1.0) * 0.02 + 1.0;
+                    float scanline = sin(uv.y * resolution.y * 0.5 + time * 2.0) * 0.015 + 1.0;
                     color *= scanline;
 
                     // Film grain
-                    float grain = (fract(sin(dot(uv * time, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.03;
+                    float grain = (fract(sin(dot(uv * time, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.025;
                     color += grain;
+
+                    // Slight contrast boost
+                    color = pow(color, vec3(0.95));
 
                     gl_FragColor = vec4(color, 1.0);
                 }
             `
         };
 
-        // Data stream particle shader
+        // Enhanced data stream particle shader with glow
         const DataStreamShader = {
             vertexShader: `
                 attribute float size;
@@ -392,7 +386,7 @@
                     vColor = customColor;
                     vAlpha = alpha;
                     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                    gl_PointSize = size * (300.0 / -mvPosition.z);
+                    gl_PointSize = size * (350.0 / -mvPosition.z);
                     gl_Position = projectionMatrix * mvPosition;
                 }
             `,
@@ -404,8 +398,41 @@
                     vec2 center = gl_PointCoord - vec2(0.5);
                     float dist = length(center);
                     float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                    alpha = pow(alpha, 1.5); // Sharper falloff
                     alpha *= vAlpha;
-                    gl_FragColor = vec4(vColor, alpha);
+                    vec3 glow = vColor * (1.0 + (1.0 - dist * 2.0) * 0.5);
+                    gl_FragColor = vec4(glow, alpha);
+                }
+            `
+        };
+
+        // Nebula particle shader for latent space
+        const NebulaShader = {
+            vertexShader: `
+                attribute float size;
+                attribute vec3 customColor;
+                attribute float alpha;
+                varying vec3 vColor;
+                varying float vAlpha;
+
+                void main() {
+                    vColor = customColor;
+                    vAlpha = alpha;
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                    gl_PointSize = size * (400.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                varying float vAlpha;
+
+                void main() {
+                    vec2 center = gl_PointCoord - vec2(0.5);
+                    float dist = length(center);
+                    float alpha = exp(-dist * dist * 8.0); // Gaussian falloff
+                    alpha *= vAlpha;
+                    gl_FragColor = vec4(vColor * 0.6, alpha * 0.15);
                 }
             `
         };
@@ -424,13 +451,16 @@
         let agents = [];
 
         // Particle systems
-        let latentParticles, dataStreams;
+        let latentParticles, dataStreams, nebulaParticles;
         let connectionLines = [];
         let agentTrails = [];
 
         // Realm meshes
         let realmRings = [];
         let matrixCore;
+
+        // Lighting
+        let coreLight;
 
         // FPS counter
         let frameCount = 0;
@@ -440,14 +470,14 @@
         function init() {
             // Scene
             scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x000011, 0.015);
+            scene.fog = new THREE.FogExp2(0x000008, 0.012);
 
             // Camera
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 8, 12);
             camera.lookAt(0, 0, 0);
 
-            // Renderer
+            // Renderer with enhanced settings for r182
             renderer = new THREE.WebGLRenderer({
                 canvas: document.getElementById('canvas'),
                 antialias: true,
@@ -457,7 +487,11 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 0.8;
+            renderer.toneMappingExposure = 1.0;
+
+            // Enable shadows (r182 improved shadow mapping)
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
             // Post-processing
             setupPostProcessing();
@@ -479,6 +513,7 @@
 
             // Create scene elements
             createEnvironment();
+            createNebulaBackground();
             createRealms();
             createMatrixCore();
             createEntities();
@@ -502,36 +537,41 @@
             const renderPass = new RenderPass(scene, camera);
             composer.addPass(renderPass);
 
-            // Bloom
+            // GTAO for ambient occlusion (r182 feature)
+            const gtaoPass = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+            gtaoPass.output = GTAOPass.OUTPUT.Default;
+            gtaoPass.enabled = true;
+            composer.addPass(gtaoPass);
+
+            // Bloom with refined settings
             const bloomPass = new UnrealBloomPass(
                 new THREE.Vector2(window.innerWidth, window.innerHeight),
-                0.25, // strength
-                0.2,  // radius
-                0.97  // threshold - very high so only the brightest pixels bloom
+                0.4,   // strength
+                0.3,   // radius
+                0.92   // threshold
             );
             composer.addPass(bloomPass);
 
-            // Chromatic aberration + vignette
+            // Chromatic aberration + vignette + color grading
             const chromaticPass = new ShaderPass(ChromaticAberrationShader);
             chromaticPass.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
             composer.addPass(chromaticPass);
 
-            // FXAA
-            const fxaaPass = new ShaderPass(FXAAShader);
-            fxaaPass.uniforms.resolution.value.set(1 / window.innerWidth, 1 / window.innerHeight);
-            composer.addPass(fxaaPass);
+            // Output pass for proper color space (r182)
+            const outputPass = new OutputPass();
+            composer.addPass(outputPass);
         }
 
         function createEnvironment() {
-            // Starfield background
+            // Enhanced starfield with variable sizes and colors
             const starsGeometry = new THREE.BufferGeometry();
-            const starsCount = 5000;
+            const starsCount = 8000;
             const positions = new Float32Array(starsCount * 3);
             const colors = new Float32Array(starsCount * 3);
             const sizes = new Float32Array(starsCount);
 
             for (let i = 0; i < starsCount; i++) {
-                const radius = 50 + Math.random() * 150;
+                const radius = 50 + Math.random() * 200;
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
 
@@ -539,16 +579,26 @@
                 positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
                 positions[i * 3 + 2] = radius * Math.cos(phi);
 
+                // More varied star colors
                 const colorChoice = Math.random();
-                if (colorChoice < 0.3) {
-                    colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.7; colors[i * 3 + 2] = 1.0;
+                if (colorChoice < 0.2) {
+                    // Blue-white
+                    colors[i * 3] = 0.7; colors[i * 3 + 1] = 0.85; colors[i * 3 + 2] = 1.0;
+                } else if (colorChoice < 0.4) {
+                    // Pure white
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
                 } else if (colorChoice < 0.6) {
-                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 0.8;
+                    // Yellow-white
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.95; colors[i * 3 + 2] = 0.8;
+                } else if (colorChoice < 0.8) {
+                    // Purple tint
+                    colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.6; colors[i * 3 + 2] = 1.0;
                 } else {
-                    colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 1.0;
+                    // Cyan tint
+                    colors[i * 3] = 0.5; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
                 }
 
-                sizes[i] = Math.random() * 2 + 0.5;
+                sizes[i] = Math.random() * 2.5 + 0.5;
             }
 
             starsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -556,10 +606,10 @@
             starsGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
             const starsMaterial = new THREE.PointsMaterial({
-                size: 0.5,
+                size: 0.6,
                 vertexColors: true,
                 transparent: true,
-                opacity: 0.4,
+                opacity: 0.5,
                 sizeAttenuation: true,
                 blending: THREE.AdditiveBlending
             });
@@ -568,17 +618,68 @@
             scene.add(stars);
         }
 
+        function createNebulaBackground() {
+            // Volumetric nebula effect in latent space
+            const geometry = new THREE.BufferGeometry();
+            const count = CONFIG.particles.nebulaCount;
+
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            const sizes = new Float32Array(count);
+            const alphas = new Float32Array(count);
+
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 6 + Math.random() * 8;
+                const y = (Math.random() - 0.5) * 6;
+
+                positions[i * 3] = Math.cos(angle) * radius + (Math.random() - 0.5) * 2;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = Math.sin(angle) * radius + (Math.random() - 0.5) * 2;
+
+                // Purple to blue to pink gradient
+                const t = Math.random();
+                if (t < 0.33) {
+                    colors[i * 3] = 0.4 + t; colors[i * 3 + 1] = 0.2; colors[i * 3 + 2] = 0.8;
+                } else if (t < 0.66) {
+                    colors[i * 3] = 0.3; colors[i * 3 + 1] = 0.4; colors[i * 3 + 2] = 1.0;
+                } else {
+                    colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.2; colors[i * 3 + 2] = 0.6;
+                }
+
+                sizes[i] = Math.random() * 8 + 4;
+                alphas[i] = Math.random() * 0.3 + 0.1;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+
+            const material = new THREE.ShaderMaterial({
+                uniforms: {},
+                vertexShader: NebulaShader.vertexShader,
+                fragmentShader: NebulaShader.fragmentShader,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            nebulaParticles = new THREE.Points(geometry, material);
+            scene.add(nebulaParticles);
+        }
+
         function createRealms() {
             Object.entries(CONFIG.realms).forEach(([key, realm], index) => {
                 if (key === 'matrix') return; // Matrix core handled separately
 
-                // Main ring
-                const ringGeometry = new THREE.TorusGeometry(realm.radius, 0.03, 16, 100);
+                // Main ring with enhanced shader
+                const ringGeometry = new THREE.TorusGeometry(realm.radius, 0.04, 16, 128);
                 const ringMaterial = new THREE.ShaderMaterial({
                     uniforms: {
                         color: { value: realm.color },
                         time: { value: 0 },
-                        opacity: { value: key === 'latent' ? 0.5 : 0.8 }
+                        opacity: { value: key === 'latent' ? 0.6 : 0.9 }
                     },
                     vertexShader: RealmRingShader.vertexShader,
                     fragmentShader: RealmRingShader.fragmentShader,
@@ -592,34 +693,35 @@
                 scene.add(ring);
                 realmRings.push({ mesh: ring, material: ringMaterial });
 
-                // Glow ring (subtle)
-                const glowGeometry = new THREE.TorusGeometry(realm.radius, 0.08, 8, 100);
-                const glowMaterial = new THREE.MeshBasicMaterial({
+                // Secondary pulse ring
+                const pulseGeometry = new THREE.TorusGeometry(realm.radius, 0.12, 8, 128);
+                const pulseMaterial = new THREE.MeshBasicMaterial({
                     color: realm.color,
                     transparent: true,
-                    opacity: 0.05,
+                    opacity: 0.03,
                     blending: THREE.AdditiveBlending
                 });
-                const glowRing = new THREE.Mesh(glowGeometry, glowMaterial);
-                glowRing.rotation.x = Math.PI / 2;
-                scene.add(glowRing);
+                const pulseRing = new THREE.Mesh(pulseGeometry, pulseMaterial);
+                pulseRing.rotation.x = Math.PI / 2;
+                scene.add(pulseRing);
 
-                // Vertical energy pillars (except for latent)
+                // Vertical energy pillars with height variation
                 if (key !== 'latent') {
-                    const pillarCount = key === 'internet' ? 6 : key === 'ide' ? 8 : 12;
+                    const pillarCount = key === 'internet' ? 8 : key === 'ide' ? 12 : 16;
                     for (let i = 0; i < pillarCount; i++) {
                         const angle = (i / pillarCount) * Math.PI * 2;
-                        const pillarGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8);
+                        const height = 0.3 + Math.random() * 0.5;
+                        const pillarGeometry = new THREE.CylinderGeometry(0.015, 0.025, height, 8);
                         const pillarMaterial = new THREE.MeshBasicMaterial({
                             color: realm.color,
                             transparent: true,
-                            opacity: 0.3,
+                            opacity: 0.4,
                             blending: THREE.AdditiveBlending
                         });
                         const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
                         pillar.position.set(
                             Math.cos(angle) * realm.radius,
-                            0,
+                            height / 2 - 0.25,
                             Math.sin(angle) * realm.radius
                         );
                         scene.add(pillar);
@@ -631,40 +733,61 @@
         function createMatrixCore() {
             const coreGroup = new THREE.Group();
 
-            // Central sphere
-            const coreGeometry = new THREE.SphereGeometry(0.3, 32, 32);
-            const coreMaterial = new THREE.MeshBasicMaterial({
+            // Central sphere with physical material
+            const coreGeometry = new THREE.SphereGeometry(0.35, 64, 64);
+            const coreMaterial = new THREE.MeshPhysicalMaterial({
                 color: 0xff0044,
+                emissive: 0xff0022,
+                emissiveIntensity: 2,
+                metalness: 0.9,
+                roughness: 0.1,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1,
                 transparent: true,
                 opacity: 0.95
             });
             const core = new THREE.Mesh(coreGeometry, coreMaterial);
+            core.castShadow = true;
             coreGroup.add(core);
 
-            // Single subtle glow sphere (reduced from 2 glow layers)
+            // Inner glow
             const glowGeometry = new THREE.SphereGeometry(0.5, 32, 32);
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
-                opacity: 0.2,
+                opacity: 0.25,
                 blending: THREE.AdditiveBlending
             });
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
             coreGroup.add(glow);
 
-            // Orbiting rings
-            for (let i = 0; i < 3; i++) {
-                const orbitGeometry = new THREE.TorusGeometry(0.5 + i * 0.15, 0.01, 8, 50);
+            // Outer pulse glow
+            const outerGlowGeometry = new THREE.SphereGeometry(0.7, 32, 32);
+            const outerGlowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0044,
+                transparent: true,
+                opacity: 0.08,
+                blending: THREE.AdditiveBlending
+            });
+            const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
+            coreGroup.add(outerGlow);
+
+            // Multiple orbiting rings at different angles
+            for (let i = 0; i < 4; i++) {
+                const orbitGeometry = new THREE.TorusGeometry(0.55 + i * 0.12, 0.012, 8, 64);
                 const orbitMaterial = new THREE.MeshBasicMaterial({
                     color: 0xff0044,
                     transparent: true,
-                    opacity: 0.6 - i * 0.15,
+                    opacity: 0.7 - i * 0.12,
                     blending: THREE.AdditiveBlending
                 });
                 const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
                 orbit.rotation.x = Math.random() * Math.PI;
                 orbit.rotation.y = Math.random() * Math.PI;
-                orbit.userData = { rotationSpeed: 0.5 + Math.random() * 0.5, axis: new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize() };
+                orbit.userData = {
+                    rotationSpeed: 0.4 + Math.random() * 0.6,
+                    axis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize()
+                };
                 coreGroup.add(orbit);
             }
 
@@ -686,7 +809,8 @@
                     speed: 0.2 + Math.random() * 0.3,
                     wobble: Math.random() * Math.PI * 2,
                     wobbleSpeed: 0.5 + Math.random() * 0.5,
-                    yOffset: (Math.random() - 0.5) * 0.3
+                    yOffset: (Math.random() - 0.5) * 0.3,
+                    pulsePhase: Math.random() * Math.PI * 2
                 };
 
                 normies.push(normie);
@@ -706,7 +830,8 @@
                     speed: 0.3 + Math.random() * 0.4,
                     yOffset: (Math.random() - 0.5) * 0.5,
                     connectionTarget: null,
-                    connectionStrength: 0
+                    connectionStrength: 0,
+                    pulsePhase: Math.random() * Math.PI * 2
                 };
 
                 operators.push(operator);
@@ -727,17 +852,18 @@
                     yOffset: (Math.random() - 0.5) * 0.8,
                     isPulling: false,
                     pullProgress: 0,
-                    pullTarget: null
+                    pullTarget: null,
+                    pulsePhase: Math.random() * Math.PI * 2
                 };
 
-                // Create trail for agent
+                // Create enhanced trail for agent
                 const trailGeometry = new THREE.BufferGeometry();
-                const trailPositions = new Float32Array(30 * 3);
+                const trailPositions = new Float32Array(50 * 3);
                 trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
                 const trailMaterial = new THREE.LineBasicMaterial({
                     color: 0xff00ff,
                     transparent: true,
-                    opacity: 0.5,
+                    opacity: 0.6,
                     blending: THREE.AdditiveBlending
                 });
                 const trail = new THREE.Line(trailGeometry, trailMaterial);
@@ -753,22 +879,27 @@
         function createEntity(color, size) {
             const group = new THREE.Group();
 
-            // Core sphere
-            const coreGeometry = new THREE.SphereGeometry(size, 16, 16);
-            const coreMaterial = new THREE.MeshBasicMaterial({
+            // Core sphere with physical material
+            const coreGeometry = new THREE.SphereGeometry(size, 24, 24);
+            const coreMaterial = new THREE.MeshPhysicalMaterial({
                 color: color,
+                emissive: color,
+                emissiveIntensity: 0.5,
+                metalness: 0.7,
+                roughness: 0.2,
+                clearcoat: 0.8,
                 transparent: true,
-                opacity: 0.9
+                opacity: 0.95
             });
             const core = new THREE.Mesh(coreGeometry, coreMaterial);
             group.add(core);
 
-            // Single subtle glow sphere (removed outer glow to reduce bloom)
-            const glowGeometry = new THREE.SphereGeometry(size * 1.8, 16, 16);
+            // Glow sphere
+            const glowGeometry = new THREE.SphereGeometry(size * 2, 16, 16);
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: color,
                 transparent: true,
-                opacity: 0.15,
+                opacity: 0.12,
                 blending: THREE.AdditiveBlending
             });
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -789,26 +920,27 @@
             for (let i = 0; i < count; i++) {
                 const angle = Math.random() * Math.PI * 2;
                 const radius = CONFIG.realms.meta.radius + 0.5 + Math.random() * (CONFIG.realms.latent.radius - CONFIG.realms.meta.radius + 2);
-                const y = (Math.random() - 0.5) * 3;
+                const y = (Math.random() - 0.5) * 4;
 
                 positions[i * 3] = Math.cos(angle) * radius;
                 positions[i * 3 + 1] = y;
                 positions[i * 3 + 2] = Math.sin(angle) * radius;
 
-                // Purple to blue gradient
+                // More vibrant purple to cyan gradient
                 const t = Math.random();
-                colors[i * 3] = 0.5 + t * 0.3;
-                colors[i * 3 + 1] = 0.2 + t * 0.2;
-                colors[i * 3 + 2] = 1.0;
+                colors[i * 3] = 0.4 + t * 0.4;
+                colors[i * 3 + 1] = 0.2 + t * 0.5;
+                colors[i * 3 + 2] = 0.9 + t * 0.1;
 
-                sizes[i] = Math.random() * 3 + 1;
+                sizes[i] = Math.random() * 4 + 1;
 
                 velocities.push({
                     angle: angle,
                     radius: radius,
-                    speed: 0.05 + Math.random() * 0.1,
-                    ySpeed: (Math.random() - 0.5) * 0.02,
-                    baseY: y
+                    speed: 0.03 + Math.random() * 0.08,
+                    ySpeed: (Math.random() - 0.5) * 0.015,
+                    baseY: y,
+                    phase: Math.random() * Math.PI * 2
                 });
             }
 
@@ -817,7 +949,9 @@
             geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
             const material = new THREE.ShaderMaterial({
-                uniforms: {},
+                uniforms: {
+                    time: { value: 0 }
+                },
                 vertexShader: `
                     attribute float size;
                     attribute vec3 customColor;
@@ -826,7 +960,7 @@
                     void main() {
                         vColor = customColor;
                         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                        gl_PointSize = size * (200.0 / -mvPosition.z);
+                        gl_PointSize = size * (250.0 / -mvPosition.z);
                         gl_Position = projectionMatrix * mvPosition;
                     }
                 `,
@@ -837,7 +971,8 @@
                         vec2 center = gl_PointCoord - vec2(0.5);
                         float dist = length(center);
                         float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
-                        gl_FragColor = vec4(vColor * 0.5, alpha * 0.25);
+                        alpha = pow(alpha, 1.5);
+                        gl_FragColor = vec4(vColor * 0.7, alpha * 0.35);
                     }
                 `,
                 transparent: true,
@@ -861,29 +996,36 @@
             const streamData = [];
 
             for (let i = 0; i < count; i++) {
-                // Random starting point in any realm
                 const angle = Math.random() * Math.PI * 2;
                 const radius = 1 + Math.random() * 6;
 
                 positions[i * 3] = Math.cos(angle) * radius;
-                positions[i * 3 + 1] = (Math.random() - 0.5) * 1;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 1.5;
                 positions[i * 3 + 2] = Math.sin(angle) * radius;
 
-                // Cyan data color
-                colors[i * 3] = 0.3;
-                colors[i * 3 + 1] = 1.0;
-                colors[i * 3 + 2] = 1.0;
+                // Varied data colors
+                const colorType = Math.random();
+                if (colorType < 0.6) {
+                    // Cyan
+                    colors[i * 3] = 0.3; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
+                } else if (colorType < 0.8) {
+                    // Green
+                    colors[i * 3] = 0.3; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 0.5;
+                } else {
+                    // White
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
+                }
 
-                sizes[i] = Math.random() * 3 + 1;
-                alphas[i] = Math.random() * 0.2 + 0.1;
+                sizes[i] = Math.random() * 4 + 1;
+                alphas[i] = Math.random() * 0.25 + 0.15;
 
                 streamData.push({
                     angle: angle,
                     radius: radius,
-                    speed: 0.02 + Math.random() * 0.05,
-                    radialSpeed: (Math.random() - 0.5) * 0.01,
+                    speed: 0.015 + Math.random() * 0.04,
+                    radialSpeed: (Math.random() - 0.5) * 0.008,
                     y: positions[i * 3 + 1],
-                    ySpeed: (Math.random() - 0.5) * 0.01
+                    ySpeed: (Math.random() - 0.5) * 0.008
                 });
             }
 
@@ -907,24 +1049,23 @@
         }
 
         function createGridFloor() {
-            // Circular grid
             const gridGroup = new THREE.Group();
 
             // Radial lines
-            const radialCount = 36;
+            const radialCount = 48;
             for (let i = 0; i < radialCount; i++) {
                 const angle = (i / radialCount) * Math.PI * 2;
                 const geometry = new THREE.BufferGeometry();
                 const positions = new Float32Array([
                     0, -0.5, 0,
-                    Math.cos(angle) * 10, -0.5, Math.sin(angle) * 10
+                    Math.cos(angle) * 12, -0.5, Math.sin(angle) * 12
                 ]);
                 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
                 const material = new THREE.LineBasicMaterial({
-                    color: 0x222244,
+                    color: 0x1a1a3a,
                     transparent: true,
-                    opacity: 0.3
+                    opacity: 0.4
                 });
 
                 const line = new THREE.Line(geometry, material);
@@ -932,9 +1073,9 @@
             }
 
             // Concentric circles
-            for (let r = 1; r <= 10; r++) {
+            for (let r = 1; r <= 12; r++) {
                 const geometry = new THREE.BufferGeometry();
-                const segments = 64;
+                const segments = 96;
                 const positions = new Float32Array((segments + 1) * 3);
 
                 for (let i = 0; i <= segments; i++) {
@@ -946,10 +1087,11 @@
 
                 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
+                const opacity = r <= 8 ? 0.3 : 0.15;
                 const material = new THREE.LineBasicMaterial({
-                    color: 0x222244,
+                    color: 0x1a1a3a,
                     transparent: true,
-                    opacity: 0.2
+                    opacity: opacity
                 });
 
                 const circle = new THREE.Line(geometry, material);
@@ -960,19 +1102,36 @@
         }
 
         function createLighting() {
-            // Ambient light
-            const ambient = new THREE.AmbientLight(0x111122, 0.5);
+            // Ambient light with subtle color
+            const ambient = new THREE.AmbientLight(0x0a0a1a, 0.8);
             scene.add(ambient);
 
-            // Point lights at each realm
-            const lightColors = [0xff0044, 0x4a9eff, 0x00ff88, 0xff00ff, 0x8844ff];
-            const lightRadii = [0.8, 2.4, 4.0, 5.6, 7.5];
+            // Core point light with shadows
+            coreLight = new THREE.PointLight(0xff0044, 3, 15);
+            coreLight.position.set(0, 0, 0);
+            coreLight.castShadow = true;
+            coreLight.shadow.mapSize.width = 512;
+            coreLight.shadow.mapSize.height = 512;
+            coreLight.shadow.radius = 4;
+            scene.add(coreLight);
 
-            lightColors.forEach((color, i) => {
-                const light = new THREE.PointLight(color, 0.5, lightRadii[i] * 2);
-                light.position.set(0, 0.5, 0);
-                scene.add(light);
+            // Realm accent lights
+            const realmLights = [
+                { color: 0x4a9eff, radius: 2.4, intensity: 1.5 },
+                { color: 0x00ff88, radius: 4.0, intensity: 1.2 },
+                { color: 0xff00ff, radius: 5.6, intensity: 1.0 },
+                { color: 0x8844ff, radius: 7.5, intensity: 0.8 }
+            ];
+
+            realmLights.forEach((light, i) => {
+                const pointLight = new THREE.PointLight(light.color, light.intensity, light.radius * 2.5);
+                pointLight.position.set(0, 0.3, 0);
+                scene.add(pointLight);
             });
+
+            // Hemisphere light for better ambient
+            const hemiLight = new THREE.HemisphereLight(0x0a0a2a, 0x000000, 0.5);
+            scene.add(hemiLight);
         }
 
         function updateEntities(delta) {
@@ -988,6 +1147,10 @@
                 const y = data.yOffset + Math.sin(data.wobble * 0.5) * 0.1;
 
                 normie.position.set(x, y, z);
+
+                // Pulse glow
+                const pulse = Math.sin(time * 3 + data.pulsePhase) * 0.3 + 0.7;
+                normie.children[1].material.opacity = 0.12 * pulse;
             });
 
             // Update operators
@@ -997,16 +1160,20 @@
 
                 const x = Math.cos(data.angle) * data.radius;
                 const z = Math.sin(data.angle) * data.radius;
-                const y = data.yOffset + Math.sin(time * 2 + index) * 0.1;
+                const y = data.yOffset + Math.sin(time * 2 + index) * 0.15;
 
                 operator.position.set(x, y, z);
 
+                // Pulse glow
+                const pulse = Math.sin(time * 2.5 + data.pulsePhase) * 0.3 + 0.7;
+                operator.children[1].material.opacity = 0.12 * pulse;
+
                 // Random connections to normies
-                if (Math.random() < 0.002) {
+                if (Math.random() < 0.003) {
                     data.connectionTarget = normies[Math.floor(Math.random() * normies.length)];
                     data.connectionStrength = 1;
                 }
-                data.connectionStrength *= 0.98;
+                data.connectionStrength *= 0.97;
             });
 
             // Update agents
@@ -1016,14 +1183,18 @@
 
                 const x = Math.cos(data.angle) * data.radius;
                 const z = Math.sin(data.angle) * data.radius;
-                const y = data.yOffset + Math.sin(time * 1.5 + index) * 0.2;
+                const y = data.yOffset + Math.sin(time * 1.5 + index) * 0.25;
 
                 agent.position.set(x, y, z);
+
+                // Pulse glow
+                const pulse = Math.sin(time * 2 + data.pulsePhase) * 0.4 + 0.6;
+                agent.children[1].material.opacity = 0.12 * pulse;
 
                 // Update trail
                 const trail = agentTrails[index];
                 trail.userData.positions.unshift(agent.position.clone());
-                if (trail.userData.positions.length > 30) {
+                if (trail.userData.positions.length > 50) {
                     trail.userData.positions.pop();
                 }
 
@@ -1038,7 +1209,7 @@
                 trail.geometry.setDrawRange(0, trail.userData.positions.length);
 
                 // Latent space pulls
-                if (!data.isPulling && Math.random() < 0.003) {
+                if (!data.isPulling && Math.random() < 0.004) {
                     data.isPulling = true;
                     data.pullProgress = 0;
                     data.pullTarget = {
@@ -1048,7 +1219,7 @@
                 }
 
                 if (data.isPulling) {
-                    data.pullProgress += delta * 0.5;
+                    data.pullProgress += delta * 0.6;
                     if (data.pullProgress >= 1) {
                         data.isPulling = false;
                     }
@@ -1067,7 +1238,7 @@
                     v.angle += v.speed * delta;
 
                     positions[i * 3] = Math.cos(v.angle) * v.radius;
-                    positions[i * 3 + 1] = v.baseY + Math.sin(time * v.ySpeed * 10) * 0.5;
+                    positions[i * 3 + 1] = v.baseY + Math.sin(time * 0.5 + v.phase) * 0.8;
                     positions[i * 3 + 2] = Math.sin(v.angle) * v.radius;
                 }
 
@@ -1085,9 +1256,8 @@
                     s.radius += s.radialSpeed;
                     s.y += s.ySpeed;
 
-                    // Keep within bounds
                     if (s.radius < 1 || s.radius > 7) s.radialSpeed *= -1;
-                    if (Math.abs(s.y) > 1) s.ySpeed *= -1;
+                    if (Math.abs(s.y) > 1.5) s.ySpeed *= -1;
 
                     positions[i * 3] = Math.cos(s.angle) * s.radius;
                     positions[i * 3 + 1] = s.y;
@@ -1095,6 +1265,11 @@
                 }
 
                 dataStreams.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Rotate nebula slowly
+            if (nebulaParticles) {
+                nebulaParticles.rotation.y += delta * 0.01;
             }
         }
 
@@ -1110,21 +1285,20 @@
                     const start = operator.position;
                     const end = data.connectionTarget.position;
 
-                    // Create curved connection
                     const midPoint = new THREE.Vector3(
                         (start.x + end.x) / 2,
-                        Math.max(start.y, end.y) + 0.5,
+                        Math.max(start.y, end.y) + 0.6,
                         (start.z + end.z) / 2
                     );
 
                     const curve = new THREE.QuadraticBezierCurve3(start, midPoint, end);
-                    const points = curve.getPoints(20);
+                    const points = curve.getPoints(30);
                     const geometry = new THREE.BufferGeometry().setFromPoints(points);
 
                     const material = new THREE.LineBasicMaterial({
                         color: 0x00ff88,
                         transparent: true,
-                        opacity: data.connectionStrength * 0.8,
+                        opacity: data.connectionStrength * 0.9,
                         blending: THREE.AdditiveBlending
                     });
 
@@ -1132,17 +1306,17 @@
                     connectionLines.push(line);
                     scene.add(line);
 
-                    // Add data packets along the line
-                    const packetCount = 3;
+                    // Data packets
+                    const packetCount = 4;
                     for (let i = 0; i < packetCount; i++) {
-                        const t = ((time * 0.5 + i / packetCount) % 1);
+                        const t = ((time * 0.6 + i / packetCount) % 1);
                         const pos = curve.getPoint(t);
 
-                        const packetGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+                        const packetGeometry = new THREE.SphereGeometry(0.035, 12, 12);
                         const packetMaterial = new THREE.MeshBasicMaterial({
                             color: 0xffffff,
                             transparent: true,
-                            opacity: data.connectionStrength * (1 - t),
+                            opacity: data.connectionStrength * (1 - t) * 1.2,
                             blending: THREE.AdditiveBlending
                         });
                         const packet = new THREE.Mesh(packetGeometry, packetMaterial);
@@ -1168,7 +1342,7 @@
                     const material = new THREE.LineBasicMaterial({
                         color: 0xff00ff,
                         transparent: true,
-                        opacity: 0.8,
+                        opacity: 0.9,
                         blending: THREE.AdditiveBlending
                     });
 
@@ -1177,12 +1351,12 @@
                     scene.add(line);
 
                     // Glow at pull point
-                    if (data.pullProgress > 0.5) {
-                        const glowGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+                    if (data.pullProgress > 0.3) {
+                        const glowGeometry = new THREE.SphereGeometry(0.12 * data.pullProgress, 16, 16);
                         const glowMaterial = new THREE.MeshBasicMaterial({
                             color: 0x8844ff,
                             transparent: true,
-                            opacity: (data.pullProgress - 0.5) * 2,
+                            opacity: data.pullProgress * 0.8,
                             blending: THREE.AdditiveBlending
                         });
                         const glow = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -1197,16 +1371,23 @@
         function updateMatrixCore() {
             if (!matrixCore) return;
 
-            // Pulse effect
-            const pulse = 1 + Math.sin(time * 3) * 0.1;
-            matrixCore.children[0].scale.setScalar(pulse);
+            // Enhanced pulse effect
+            const pulse = 1 + Math.sin(time * 3) * 0.12;
+            const pulse2 = 1 + Math.sin(time * 5) * 0.05;
+            matrixCore.children[0].scale.setScalar(pulse * pulse2);
             matrixCore.children[1].scale.setScalar(pulse);
+            matrixCore.children[2].scale.setScalar(1 + Math.sin(time * 2) * 0.15);
 
-            // Rotate orbital rings (now starting at index 2 since we removed outer glow)
-            for (let i = 2; i < matrixCore.children.length; i++) {
+            // Rotate orbital rings
+            for (let i = 3; i < matrixCore.children.length; i++) {
                 const ring = matrixCore.children[i];
                 const data = ring.userData;
-                ring.rotateOnAxis(data.axis, data.rotationSpeed * 0.02);
+                ring.rotateOnAxis(data.axis, data.rotationSpeed * 0.025);
+            }
+
+            // Pulse core light
+            if (coreLight) {
+                coreLight.intensity = 3 + Math.sin(time * 4) * 0.5;
             }
         }
 
@@ -1231,10 +1412,12 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
 
-            // Update post-processing uniforms
             composer.passes.forEach(pass => {
                 if (pass.uniforms && pass.uniforms.resolution) {
                     pass.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+                }
+                if (pass.setSize) {
+                    pass.setSize(window.innerWidth, window.innerHeight);
                 }
             });
         }
@@ -1245,10 +1428,8 @@
             const delta = clock.getDelta();
             time += delta;
 
-            // Update controls
             controls.update();
 
-            // Update all systems
             updateEntities(delta);
             updateParticles(delta);
             updateConnections();
@@ -1256,14 +1437,12 @@
             updateRealmRings();
             updateFPS();
 
-            // Update post-processing time
             composer.passes.forEach(pass => {
                 if (pass.uniforms && pass.uniforms.time) {
                     pass.uniforms.time.value = time;
                 }
             });
 
-            // Render
             composer.render();
         }
 
