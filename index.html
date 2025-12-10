@@ -166,8 +166,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 48px;
-            height: 48px;
+            width: 56px;
+            height: 56px;
             padding: 0;
             background: linear-gradient(
                 135deg,
@@ -196,8 +196,8 @@
         }
 
         #wombo-badge img {
-            width: 28px;
-            height: 28px;
+            width: 36px;
+            height: 36px;
             filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
         }
     </style>
@@ -1102,14 +1102,15 @@
 
                 const material = new THREE.SpriteMaterial({
                     map: Math.random() > 0.5 ? tex0 : tex1,
+                    color: 0x222222,
                     transparent: true,
-                    opacity: 0.6 + Math.random() * 0.3,
+                    opacity: 0.8 + Math.random() * 0.2,
                     depthWrite: false,
-                    alphaTest: 0.1
+                    blending: THREE.AdditiveBlending
                 });
 
                 const sprite = new THREE.Sprite(material);
-                const scale = 0.15 + Math.random() * 0.15;
+                const scale = 0.2 + Math.random() * 0.2;
                 sprite.scale.set(scale, scale, 1);
                 sprite.position.set(
                     Math.cos(angle) * radius,
@@ -1135,38 +1136,21 @@
         }
 
         function createBinaryTextureChar(char) {
-            const size = 128;
+            const size = 64;
             const canvas = document.createElement('canvas');
             canvas.width = size;
             canvas.height = size;
             const ctx = canvas.getContext('2d');
 
-            // Start with opaque white background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, size, size);
+            // Clear to transparent
+            ctx.clearRect(0, 0, size, size);
 
-            // Draw black text
-            ctx.fillStyle = '#000000';
-            ctx.font = `bold ${size * 0.8}px "Consolas", monospace`;
+            // Draw white/light gray text for additive blending
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${size * 0.85}px "Consolas", "Monaco", monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(char, size / 2, size / 2 + 4);
-
-            // Now convert: white -> transparent, black -> opaque black
-            const imageData = ctx.getImageData(0, 0, size, size);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                // Calculate luminance (how white the pixel is)
-                const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                // Invert: white (255) becomes transparent (0), black (0) becomes opaque (255)
-                const alpha = 255 - lum;
-                // Keep the pixel black, just vary the alpha
-                data[i] = 0;       // R
-                data[i + 1] = 0;   // G
-                data[i + 2] = 0;   // B
-                data[i + 3] = alpha; // A
-            }
-            ctx.putImageData(imageData, 0, 0);
+            ctx.fillText(char, size / 2, size / 2 + 2);
 
             const texture = new THREE.CanvasTexture(canvas);
             texture.colorSpace = THREE.SRGBColorSpace;
