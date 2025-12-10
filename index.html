@@ -543,12 +543,12 @@
             gtaoPass.enabled = true;
             composer.addPass(gtaoPass);
 
-            // Bloom with refined settings
+            // Bloom - subtle glow only
             const bloomPass = new UnrealBloomPass(
                 new THREE.Vector2(window.innerWidth, window.innerHeight),
-                0.4,   // strength
-                0.3,   // radius
-                0.92   // threshold
+                0.15,  // strength - much reduced
+                0.2,   // radius
+                0.95   // threshold - higher = less bloom
             );
             composer.addPass(bloomPass);
 
@@ -738,7 +738,7 @@
             const coreMaterial = new THREE.MeshPhysicalMaterial({
                 color: 0xff0044,
                 emissive: 0xff0022,
-                emissiveIntensity: 2,
+                emissiveIntensity: 0.5,
                 metalness: 0.9,
                 roughness: 0.1,
                 clearcoat: 1.0,
@@ -755,7 +755,7 @@
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
-                opacity: 0.25,
+                opacity: 0.1,
                 blending: THREE.AdditiveBlending
             });
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -766,7 +766,7 @@
             const outerGlowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
-                opacity: 0.08,
+                opacity: 0.03,
                 blending: THREE.AdditiveBlending
             });
             const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
@@ -884,7 +884,7 @@
             const coreMaterial = new THREE.MeshPhysicalMaterial({
                 color: color,
                 emissive: color,
-                emissiveIntensity: 0.5,
+                emissiveIntensity: 0.2,
                 metalness: 0.7,
                 roughness: 0.2,
                 clearcoat: 0.8,
@@ -899,7 +899,7 @@
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: color,
                 transparent: true,
-                opacity: 0.12,
+                opacity: 0.06,
                 blending: THREE.AdditiveBlending
             });
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -1107,7 +1107,7 @@
             scene.add(ambient);
 
             // Core point light with shadows
-            coreLight = new THREE.PointLight(0xff0044, 3, 15);
+            coreLight = new THREE.PointLight(0xff0044, 1.5, 15);
             coreLight.position.set(0, 0, 0);
             coreLight.castShadow = true;
             coreLight.shadow.mapSize.width = 512;
@@ -1387,7 +1387,7 @@
 
             // Pulse core light
             if (coreLight) {
-                coreLight.intensity = 3 + Math.sin(time * 4) * 0.5;
+                coreLight.intensity = 1.5 + Math.sin(time * 4) * 0.3;
             }
         }
 
