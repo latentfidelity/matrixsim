@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Realm Simulation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+
+        #canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        .ui-panel {
+            position: fixed;
+            color: #fff;
+            font-size: 12px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        #legend {
+            bottom: 20px;
+            left: 20px;
+        }
+
+        #legend h2 {
+            font-size: 14px;
+            margin-bottom: 15px;
+            color: #0ff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px #0ff;
+        }
+
+        .legend-section {
+            margin-bottom: 15px;
+        }
+
+        .legend-section h3 {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 6px 0;
+            font-size: 11px;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .legend-circle {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 2px solid;
+            background: transparent;
+        }
+
+        .dot-normie { background: #4a9eff; color: #4a9eff; }
+        .dot-operator { background: #00ff88; color: #00ff88; }
+        .dot-agent { background: #ff00ff; color: #ff00ff; }
+
+        .circle-matrix { border-color: #ff0044; }
+        .circle-internet { border-color: #4a9eff; }
+        .circle-ide { border-color: #00ff88; }
+        .circle-meta { border-color: #ff00ff; }
+        .circle-latent { border-color: #8844ff; }
+
+        #info {
+            top: 20px;
+            right: 20px;
+            max-width: 280px;
+        }
+
+        #info h2 {
+            font-size: 14px;
+            margin-bottom: 15px;
+            color: #0ff;
+            text-shadow: 0 0 20px #0ff;
+        }
+
+        #info p {
+            color: #888;
+            line-height: 1.6;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+
+        #info .highlight {
+            color: #fff;
+        }
+
+        #title {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 24px;
+            z-index: 100;
+            text-align: center;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            text-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
+        }
+
+        #title span {
+            color: #0ff;
+            text-shadow: 0 0 30px #0ff, 0 0 60px #0ff;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            font-size: 10px;
+            color: #666;
+        }
+
+        #fps {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            font-size: 10px;
+            color: #0ff;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div id="title">DIGITAL <span>REALM</span> SIMULATION</div>
+    <div id="fps">FPS: 60</div>
+
+    <div class="ui-panel" id="legend">
+        <h2>Legend</h2>
+
+        <div class="legend-section">
+            <h3>Entities</h3>
+            <div class="legend-item">
+                <div class="legend-dot dot-normie"></div>
+                <span>Normies - Internet dwellers</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot dot-operator"></div>
+                <span>Operators - IDE masters</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot dot-agent"></div>
+                <span>Agents - Meta travelers</span>
+            </div>
+        </div>
+
+        <div class="legend-section">
+            <h3>Realms</h3>
+            <div class="legend-item">
+                <div class="legend-circle circle-matrix"></div>
+                <span>Matrix / Real World</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle circle-internet"></div>
+                <span>The Internet</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle circle-ide"></div>
+                <span>The IDE</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle circle-meta"></div>
+                <span>The Meta</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle circle-latent"></div>
+                <span>Latent Space</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="ui-panel" id="info">
+        <h2>// SYSTEM DYNAMICS</h2>
+        <p><span class="highlight">Normies</span> exist only within The Internet, unaware of deeper layers.</p>
+        <p><span class="highlight">Operators</span> work from The IDE, reaching into The Internet to build and manipulate.</p>
+        <p><span class="highlight">Agents</span> traverse The Meta, pulling raw logic from Latent Space to execute Operator commands.</p>
+        <p style="color: #ff0044; margin-top: 15px;">The Matrix at center is the convergence point - where digital meets real.</p>
+    </div>
+
+    <div id="controls">
+        Drag to rotate • Scroll to zoom • Double-click to reset
+    </div>
+
+    <!-- Three.js and dependencies -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            realms: {
+                matrix: { radius: 0.8, color: new THREE.Color(0xff0044), name: 'MATRIX' },
+                internet: { radius: 2.4, color: new THREE.Color(0x4a9eff), name: 'INTERNET' },
+                ide: { radius: 4.0, color: new THREE.Color(0x00ff88), name: 'IDE' },
+                meta: { radius: 5.6, color: new THREE.Color(0xff00ff), name: 'META' },
+                latent: { radius: 7.5, color: new THREE.Color(0x8844ff), name: 'LATENT SPACE' }
+            },
+            entities: {
+                normies: 80,
+                operators: 15,
+                agents: 10
+            },
+            particles: {
+                latentCount: 1000,
+                dataStreamCount: 200
+            }
+        };
+
+        // ============================================
+        // CUSTOM SHADERS
+        // ============================================
+
+        // Realm ring shader with energy flow
+        const RealmRingShader = {
+            vertexShader: `
+                varying vec2 vUv;
+                varying vec3 vPosition;
+                void main() {
+                    vUv = uv;
+                    vPosition = position;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 color;
+                uniform float time;
+                uniform float opacity;
+                varying vec2 vUv;
+                varying vec3 vPosition;
+
+                void main() {
+                    float angle = atan(vPosition.y, vPosition.x);
+                    float wave = sin(angle * 20.0 + time * 2.0) * 0.5 + 0.5;
+                    float pulse = sin(time * 3.0) * 0.3 + 0.7;
+                    float intensity = wave * 0.3 + 0.7;
+                    intensity *= pulse;
+
+                    vec3 finalColor = color * intensity;
+                    float alpha = opacity * (0.6 + wave * 0.4);
+
+                    gl_FragColor = vec4(finalColor, alpha);
+                }
+            `
+        };
+
+        // Entity glow shader
+        const EntityGlowShader = {
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 color;
+                uniform float time;
+                uniform float intensity;
+                varying vec2 vUv;
+
+                void main() {
+                    vec2 center = vec2(0.5, 0.5);
+                    float dist = distance(vUv, center);
+                    float pulse = sin(time * 4.0) * 0.2 + 0.8;
+                    float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+                    glow = pow(glow, 2.0) * intensity * pulse;
+
+                    gl_FragColor = vec4(color, glow);
+                }
+            `
+        };
+
+        // Chromatic aberration + vignette post-process
+        const ChromaticAberrationShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                resolution: { value: new THREE.Vector2() },
+                time: { value: 0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform vec2 resolution;
+                uniform float time;
+                varying vec2 vUv;
+
+                void main() {
+                    vec2 uv = vUv;
+                    vec2 center = vec2(0.5);
+                    float dist = distance(uv, center);
+
+                    // Chromatic aberration (subtle)
+                    float aberration = 0.0005 + dist * 0.001;
+                    vec2 dir = normalize(uv - center);
+
+                    float r = texture2D(tDiffuse, uv + dir * aberration).r;
+                    float g = texture2D(tDiffuse, uv).g;
+                    float b = texture2D(tDiffuse, uv - dir * aberration).b;
+
+                    vec3 color = vec3(r, g, b);
+
+                    // Vignette
+                    float vignette = 1.0 - dist * 0.8;
+                    vignette = smoothstep(0.0, 1.0, vignette);
+                    color *= vignette;
+
+                    // Subtle scanlines
+                    float scanline = sin(uv.y * resolution.y * 1.0) * 0.02 + 1.0;
+                    color *= scanline;
+
+                    // Film grain
+                    float grain = (fract(sin(dot(uv * time, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.03;
+                    color += grain;
+
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            `
+        };
+
+        // Data stream particle shader
+        const DataStreamShader = {
+            vertexShader: `
+                attribute float size;
+                attribute vec3 customColor;
+                attribute float alpha;
+                varying vec3 vColor;
+                varying float vAlpha;
+
+                void main() {
+                    vColor = customColor;
+                    vAlpha = alpha;
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                    gl_PointSize = size * (300.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                varying float vAlpha;
+
+                void main() {
+                    vec2 center = gl_PointCoord - vec2(0.5);
+                    float dist = length(center);
+                    float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                    alpha *= vAlpha;
+                    gl_FragColor = vec4(vColor, alpha);
+                }
+            `
+        };
+
+        // ============================================
+        // SCENE SETUP
+        // ============================================
+        let scene, camera, renderer, composer;
+        let controls;
+        let clock = new THREE.Clock();
+        let time = 0;
+
+        // Entity containers
+        let normies = [];
+        let operators = [];
+        let agents = [];
+
+        // Particle systems
+        let latentParticles, dataStreams;
+        let connectionLines = [];
+        let agentTrails = [];
+
+        // Realm meshes
+        let realmRings = [];
+        let matrixCore;
+
+        // FPS counter
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
+        const fpsElement = document.getElementById('fps');
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000011, 0.015);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 8, 12);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('canvas'),
+                antialias: true,
+                alpha: true,
+                powerPreference: 'high-performance'
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 0.8;
+
+            // Post-processing
+            setupPostProcessing();
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 30;
+            controls.minDistance = 5;
+            controls.maxPolarAngle = Math.PI * 0.85;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.3;
+
+            // Double-click to reset
+            renderer.domElement.addEventListener('dblclick', () => {
+                controls.reset();
+            });
+
+            // Create scene elements
+            createEnvironment();
+            createRealms();
+            createMatrixCore();
+            createEntities();
+            createLatentParticles();
+            createDataStreams();
+            createGridFloor();
+
+            // Lighting
+            createLighting();
+
+            // Events
+            window.addEventListener('resize', onWindowResize);
+
+            // Start animation
+            animate();
+        }
+
+        function setupPostProcessing() {
+            composer = new EffectComposer(renderer);
+
+            const renderPass = new RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            // Bloom
+            const bloomPass = new UnrealBloomPass(
+                new THREE.Vector2(window.innerWidth, window.innerHeight),
+                0.25, // strength
+                0.2,  // radius
+                0.97  // threshold - very high so only the brightest pixels bloom
+            );
+            composer.addPass(bloomPass);
+
+            // Chromatic aberration + vignette
+            const chromaticPass = new ShaderPass(ChromaticAberrationShader);
+            chromaticPass.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+            composer.addPass(chromaticPass);
+
+            // FXAA
+            const fxaaPass = new ShaderPass(FXAAShader);
+            fxaaPass.uniforms.resolution.value.set(1 / window.innerWidth, 1 / window.innerHeight);
+            composer.addPass(fxaaPass);
+        }
+
+        function createEnvironment() {
+            // Starfield background
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsCount = 5000;
+            const positions = new Float32Array(starsCount * 3);
+            const colors = new Float32Array(starsCount * 3);
+            const sizes = new Float32Array(starsCount);
+
+            for (let i = 0; i < starsCount; i++) {
+                const radius = 50 + Math.random() * 150;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+
+                positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = radius * Math.cos(phi);
+
+                const colorChoice = Math.random();
+                if (colorChoice < 0.3) {
+                    colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.7; colors[i * 3 + 2] = 1.0;
+                } else if (colorChoice < 0.6) {
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 0.8;
+                } else {
+                    colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 1.0;
+                }
+
+                sizes[i] = Math.random() * 2 + 0.5;
+            }
+
+            starsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starsGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            starsGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const starsMaterial = new THREE.PointsMaterial({
+                size: 0.5,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.4,
+                sizeAttenuation: true,
+                blending: THREE.AdditiveBlending
+            });
+
+            const stars = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(stars);
+        }
+
+        function createRealms() {
+            Object.entries(CONFIG.realms).forEach(([key, realm], index) => {
+                if (key === 'matrix') return; // Matrix core handled separately
+
+                // Main ring
+                const ringGeometry = new THREE.TorusGeometry(realm.radius, 0.03, 16, 100);
+                const ringMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        color: { value: realm.color },
+                        time: { value: 0 },
+                        opacity: { value: key === 'latent' ? 0.5 : 0.8 }
+                    },
+                    vertexShader: RealmRingShader.vertexShader,
+                    fragmentShader: RealmRingShader.fragmentShader,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    side: THREE.DoubleSide
+                });
+
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.rotation.x = Math.PI / 2;
+                scene.add(ring);
+                realmRings.push({ mesh: ring, material: ringMaterial });
+
+                // Glow ring (subtle)
+                const glowGeometry = new THREE.TorusGeometry(realm.radius, 0.08, 8, 100);
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: realm.color,
+                    transparent: true,
+                    opacity: 0.05,
+                    blending: THREE.AdditiveBlending
+                });
+                const glowRing = new THREE.Mesh(glowGeometry, glowMaterial);
+                glowRing.rotation.x = Math.PI / 2;
+                scene.add(glowRing);
+
+                // Vertical energy pillars (except for latent)
+                if (key !== 'latent') {
+                    const pillarCount = key === 'internet' ? 6 : key === 'ide' ? 8 : 12;
+                    for (let i = 0; i < pillarCount; i++) {
+                        const angle = (i / pillarCount) * Math.PI * 2;
+                        const pillarGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8);
+                        const pillarMaterial = new THREE.MeshBasicMaterial({
+                            color: realm.color,
+                            transparent: true,
+                            opacity: 0.3,
+                            blending: THREE.AdditiveBlending
+                        });
+                        const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+                        pillar.position.set(
+                            Math.cos(angle) * realm.radius,
+                            0,
+                            Math.sin(angle) * realm.radius
+                        );
+                        scene.add(pillar);
+                    }
+                }
+            });
+        }
+
+        function createMatrixCore() {
+            const coreGroup = new THREE.Group();
+
+            // Central sphere
+            const coreGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+            const coreMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0044,
+                transparent: true,
+                opacity: 0.95
+            });
+            const core = new THREE.Mesh(coreGeometry, coreMaterial);
+            coreGroup.add(core);
+
+            // Single subtle glow sphere (reduced from 2 glow layers)
+            const glowGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0044,
+                transparent: true,
+                opacity: 0.2,
+                blending: THREE.AdditiveBlending
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            coreGroup.add(glow);
+
+            // Orbiting rings
+            for (let i = 0; i < 3; i++) {
+                const orbitGeometry = new THREE.TorusGeometry(0.5 + i * 0.15, 0.01, 8, 50);
+                const orbitMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xff0044,
+                    transparent: true,
+                    opacity: 0.6 - i * 0.15,
+                    blending: THREE.AdditiveBlending
+                });
+                const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
+                orbit.rotation.x = Math.random() * Math.PI;
+                orbit.rotation.y = Math.random() * Math.PI;
+                orbit.userData = { rotationSpeed: 0.5 + Math.random() * 0.5, axis: new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize() };
+                coreGroup.add(orbit);
+            }
+
+            scene.add(coreGroup);
+            matrixCore = coreGroup;
+        }
+
+        function createEntities() {
+            // Normies (in Internet realm)
+            for (let i = 0; i < CONFIG.entities.normies; i++) {
+                const normie = createEntity(0x4a9eff, 0.08);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = CONFIG.realms.matrix.radius + 0.3 + Math.random() * (CONFIG.realms.internet.radius - CONFIG.realms.matrix.radius - 0.5);
+
+                normie.userData = {
+                    type: 'normie',
+                    angle: angle,
+                    radius: radius,
+                    speed: 0.2 + Math.random() * 0.3,
+                    wobble: Math.random() * Math.PI * 2,
+                    wobbleSpeed: 0.5 + Math.random() * 0.5,
+                    yOffset: (Math.random() - 0.5) * 0.3
+                };
+
+                normies.push(normie);
+                scene.add(normie);
+            }
+
+            // Operators (in IDE realm)
+            for (let i = 0; i < CONFIG.entities.operators; i++) {
+                const operator = createEntity(0x00ff88, 0.12);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = CONFIG.realms.internet.radius + 0.3 + Math.random() * (CONFIG.realms.ide.radius - CONFIG.realms.internet.radius - 0.5);
+
+                operator.userData = {
+                    type: 'operator',
+                    angle: angle,
+                    radius: radius,
+                    speed: 0.3 + Math.random() * 0.4,
+                    yOffset: (Math.random() - 0.5) * 0.5,
+                    connectionTarget: null,
+                    connectionStrength: 0
+                };
+
+                operators.push(operator);
+                scene.add(operator);
+            }
+
+            // Agents (in Meta realm)
+            for (let i = 0; i < CONFIG.entities.agents; i++) {
+                const agent = createEntity(0xff00ff, 0.15);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = CONFIG.realms.ide.radius + 0.3 + Math.random() * (CONFIG.realms.meta.radius - CONFIG.realms.ide.radius - 0.5);
+
+                agent.userData = {
+                    type: 'agent',
+                    angle: angle,
+                    radius: radius,
+                    speed: 0.4 + Math.random() * 0.5,
+                    yOffset: (Math.random() - 0.5) * 0.8,
+                    isPulling: false,
+                    pullProgress: 0,
+                    pullTarget: null
+                };
+
+                // Create trail for agent
+                const trailGeometry = new THREE.BufferGeometry();
+                const trailPositions = new Float32Array(30 * 3);
+                trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+                const trailMaterial = new THREE.LineBasicMaterial({
+                    color: 0xff00ff,
+                    transparent: true,
+                    opacity: 0.5,
+                    blending: THREE.AdditiveBlending
+                });
+                const trail = new THREE.Line(trailGeometry, trailMaterial);
+                trail.userData = { positions: [] };
+                agentTrails.push(trail);
+                scene.add(trail);
+
+                agents.push(agent);
+                scene.add(agent);
+            }
+        }
+
+        function createEntity(color, size) {
+            const group = new THREE.Group();
+
+            // Core sphere
+            const coreGeometry = new THREE.SphereGeometry(size, 16, 16);
+            const coreMaterial = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.9
+            });
+            const core = new THREE.Mesh(coreGeometry, coreMaterial);
+            group.add(core);
+
+            // Single subtle glow sphere (removed outer glow to reduce bloom)
+            const glowGeometry = new THREE.SphereGeometry(size * 1.8, 16, 16);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.15,
+                blending: THREE.AdditiveBlending
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            group.add(glow);
+
+            return group;
+        }
+
+        function createLatentParticles() {
+            const geometry = new THREE.BufferGeometry();
+            const count = CONFIG.particles.latentCount;
+
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            const sizes = new Float32Array(count);
+            const velocities = [];
+
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = CONFIG.realms.meta.radius + 0.5 + Math.random() * (CONFIG.realms.latent.radius - CONFIG.realms.meta.radius + 2);
+                const y = (Math.random() - 0.5) * 3;
+
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+
+                // Purple to blue gradient
+                const t = Math.random();
+                colors[i * 3] = 0.5 + t * 0.3;
+                colors[i * 3 + 1] = 0.2 + t * 0.2;
+                colors[i * 3 + 2] = 1.0;
+
+                sizes[i] = Math.random() * 3 + 1;
+
+                velocities.push({
+                    angle: angle,
+                    radius: radius,
+                    speed: 0.05 + Math.random() * 0.1,
+                    ySpeed: (Math.random() - 0.5) * 0.02,
+                    baseY: y
+                });
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const material = new THREE.ShaderMaterial({
+                uniforms: {},
+                vertexShader: `
+                    attribute float size;
+                    attribute vec3 customColor;
+                    varying vec3 vColor;
+
+                    void main() {
+                        vColor = customColor;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * (200.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+
+                    void main() {
+                        vec2 center = gl_PointCoord - vec2(0.5);
+                        float dist = length(center);
+                        float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                        gl_FragColor = vec4(vColor * 0.5, alpha * 0.25);
+                    }
+                `,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            latentParticles = new THREE.Points(geometry, material);
+            latentParticles.userData = { velocities: velocities };
+            scene.add(latentParticles);
+        }
+
+        function createDataStreams() {
+            const geometry = new THREE.BufferGeometry();
+            const count = CONFIG.particles.dataStreamCount;
+
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            const sizes = new Float32Array(count);
+            const alphas = new Float32Array(count);
+            const streamData = [];
+
+            for (let i = 0; i < count; i++) {
+                // Random starting point in any realm
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1 + Math.random() * 6;
+
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 1;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+
+                // Cyan data color
+                colors[i * 3] = 0.3;
+                colors[i * 3 + 1] = 1.0;
+                colors[i * 3 + 2] = 1.0;
+
+                sizes[i] = Math.random() * 3 + 1;
+                alphas[i] = Math.random() * 0.2 + 0.1;
+
+                streamData.push({
+                    angle: angle,
+                    radius: radius,
+                    speed: 0.02 + Math.random() * 0.05,
+                    radialSpeed: (Math.random() - 0.5) * 0.01,
+                    y: positions[i * 3 + 1],
+                    ySpeed: (Math.random() - 0.5) * 0.01
+                });
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+
+            const material = new THREE.ShaderMaterial({
+                uniforms: {},
+                vertexShader: DataStreamShader.vertexShader,
+                fragmentShader: DataStreamShader.fragmentShader,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            dataStreams = new THREE.Points(geometry, material);
+            dataStreams.userData = { streamData: streamData };
+            scene.add(dataStreams);
+        }
+
+        function createGridFloor() {
+            // Circular grid
+            const gridGroup = new THREE.Group();
+
+            // Radial lines
+            const radialCount = 36;
+            for (let i = 0; i < radialCount; i++) {
+                const angle = (i / radialCount) * Math.PI * 2;
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array([
+                    0, -0.5, 0,
+                    Math.cos(angle) * 10, -0.5, Math.sin(angle) * 10
+                ]);
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const material = new THREE.LineBasicMaterial({
+                    color: 0x222244,
+                    transparent: true,
+                    opacity: 0.3
+                });
+
+                const line = new THREE.Line(geometry, material);
+                gridGroup.add(line);
+            }
+
+            // Concentric circles
+            for (let r = 1; r <= 10; r++) {
+                const geometry = new THREE.BufferGeometry();
+                const segments = 64;
+                const positions = new Float32Array((segments + 1) * 3);
+
+                for (let i = 0; i <= segments; i++) {
+                    const angle = (i / segments) * Math.PI * 2;
+                    positions[i * 3] = Math.cos(angle) * r;
+                    positions[i * 3 + 1] = -0.5;
+                    positions[i * 3 + 2] = Math.sin(angle) * r;
+                }
+
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const material = new THREE.LineBasicMaterial({
+                    color: 0x222244,
+                    transparent: true,
+                    opacity: 0.2
+                });
+
+                const circle = new THREE.Line(geometry, material);
+                gridGroup.add(circle);
+            }
+
+            scene.add(gridGroup);
+        }
+
+        function createLighting() {
+            // Ambient light
+            const ambient = new THREE.AmbientLight(0x111122, 0.5);
+            scene.add(ambient);
+
+            // Point lights at each realm
+            const lightColors = [0xff0044, 0x4a9eff, 0x00ff88, 0xff00ff, 0x8844ff];
+            const lightRadii = [0.8, 2.4, 4.0, 5.6, 7.5];
+
+            lightColors.forEach((color, i) => {
+                const light = new THREE.PointLight(color, 0.5, lightRadii[i] * 2);
+                light.position.set(0, 0.5, 0);
+                scene.add(light);
+            });
+        }
+
+        function updateEntities(delta) {
+            // Update normies
+            normies.forEach(normie => {
+                const data = normie.userData;
+                data.angle += data.speed * delta;
+                data.wobble += data.wobbleSpeed * delta;
+
+                const wobbleOffset = Math.sin(data.wobble) * 0.1;
+                const x = Math.cos(data.angle) * (data.radius + wobbleOffset);
+                const z = Math.sin(data.angle) * (data.radius + wobbleOffset);
+                const y = data.yOffset + Math.sin(data.wobble * 0.5) * 0.1;
+
+                normie.position.set(x, y, z);
+            });
+
+            // Update operators
+            operators.forEach((operator, index) => {
+                const data = operator.userData;
+                data.angle += data.speed * delta;
+
+                const x = Math.cos(data.angle) * data.radius;
+                const z = Math.sin(data.angle) * data.radius;
+                const y = data.yOffset + Math.sin(time * 2 + index) * 0.1;
+
+                operator.position.set(x, y, z);
+
+                // Random connections to normies
+                if (Math.random() < 0.002) {
+                    data.connectionTarget = normies[Math.floor(Math.random() * normies.length)];
+                    data.connectionStrength = 1;
+                }
+                data.connectionStrength *= 0.98;
+            });
+
+            // Update agents
+            agents.forEach((agent, index) => {
+                const data = agent.userData;
+                data.angle += data.speed * delta;
+
+                const x = Math.cos(data.angle) * data.radius;
+                const z = Math.sin(data.angle) * data.radius;
+                const y = data.yOffset + Math.sin(time * 1.5 + index) * 0.2;
+
+                agent.position.set(x, y, z);
+
+                // Update trail
+                const trail = agentTrails[index];
+                trail.userData.positions.unshift(agent.position.clone());
+                if (trail.userData.positions.length > 30) {
+                    trail.userData.positions.pop();
+                }
+
+                const trailPositions = trail.geometry.attributes.position.array;
+                for (let i = 0; i < trail.userData.positions.length; i++) {
+                    const pos = trail.userData.positions[i];
+                    trailPositions[i * 3] = pos.x;
+                    trailPositions[i * 3 + 1] = pos.y;
+                    trailPositions[i * 3 + 2] = pos.z;
+                }
+                trail.geometry.attributes.position.needsUpdate = true;
+                trail.geometry.setDrawRange(0, trail.userData.positions.length);
+
+                // Latent space pulls
+                if (!data.isPulling && Math.random() < 0.003) {
+                    data.isPulling = true;
+                    data.pullProgress = 0;
+                    data.pullTarget = {
+                        angle: data.angle + (Math.random() - 0.5) * 0.5,
+                        radius: CONFIG.realms.latent.radius * (0.9 + Math.random() * 0.2)
+                    };
+                }
+
+                if (data.isPulling) {
+                    data.pullProgress += delta * 0.5;
+                    if (data.pullProgress >= 1) {
+                        data.isPulling = false;
+                    }
+                }
+            });
+        }
+
+        function updateParticles(delta) {
+            // Update latent particles
+            if (latentParticles) {
+                const positions = latentParticles.geometry.attributes.position.array;
+                const velocities = latentParticles.userData.velocities;
+
+                for (let i = 0; i < velocities.length; i++) {
+                    const v = velocities[i];
+                    v.angle += v.speed * delta;
+
+                    positions[i * 3] = Math.cos(v.angle) * v.radius;
+                    positions[i * 3 + 1] = v.baseY + Math.sin(time * v.ySpeed * 10) * 0.5;
+                    positions[i * 3 + 2] = Math.sin(v.angle) * v.radius;
+                }
+
+                latentParticles.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Update data streams
+            if (dataStreams) {
+                const positions = dataStreams.geometry.attributes.position.array;
+                const streamData = dataStreams.userData.streamData;
+
+                for (let i = 0; i < streamData.length; i++) {
+                    const s = streamData[i];
+                    s.angle += s.speed * delta;
+                    s.radius += s.radialSpeed;
+                    s.y += s.ySpeed;
+
+                    // Keep within bounds
+                    if (s.radius < 1 || s.radius > 7) s.radialSpeed *= -1;
+                    if (Math.abs(s.y) > 1) s.ySpeed *= -1;
+
+                    positions[i * 3] = Math.cos(s.angle) * s.radius;
+                    positions[i * 3 + 1] = s.y;
+                    positions[i * 3 + 2] = Math.sin(s.angle) * s.radius;
+                }
+
+                dataStreams.geometry.attributes.position.needsUpdate = true;
+            }
+        }
+
+        function updateConnections() {
+            // Remove old connection lines
+            connectionLines.forEach(line => scene.remove(line));
+            connectionLines = [];
+
+            // Draw operator connections
+            operators.forEach(operator => {
+                const data = operator.userData;
+                if (data.connectionStrength > 0.1 && data.connectionTarget) {
+                    const start = operator.position;
+                    const end = data.connectionTarget.position;
+
+                    // Create curved connection
+                    const midPoint = new THREE.Vector3(
+                        (start.x + end.x) / 2,
+                        Math.max(start.y, end.y) + 0.5,
+                        (start.z + end.z) / 2
+                    );
+
+                    const curve = new THREE.QuadraticBezierCurve3(start, midPoint, end);
+                    const points = curve.getPoints(20);
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+                    const material = new THREE.LineBasicMaterial({
+                        color: 0x00ff88,
+                        transparent: true,
+                        opacity: data.connectionStrength * 0.8,
+                        blending: THREE.AdditiveBlending
+                    });
+
+                    const line = new THREE.Line(geometry, material);
+                    connectionLines.push(line);
+                    scene.add(line);
+
+                    // Add data packets along the line
+                    const packetCount = 3;
+                    for (let i = 0; i < packetCount; i++) {
+                        const t = ((time * 0.5 + i / packetCount) % 1);
+                        const pos = curve.getPoint(t);
+
+                        const packetGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+                        const packetMaterial = new THREE.MeshBasicMaterial({
+                            color: 0xffffff,
+                            transparent: true,
+                            opacity: data.connectionStrength * (1 - t),
+                            blending: THREE.AdditiveBlending
+                        });
+                        const packet = new THREE.Mesh(packetGeometry, packetMaterial);
+                        packet.position.copy(pos);
+                        connectionLines.push(packet);
+                        scene.add(packet);
+                    }
+                }
+            });
+
+            // Draw agent pull beams
+            agents.forEach(agent => {
+                const data = agent.userData;
+                if (data.isPulling && data.pullTarget) {
+                    const start = agent.position;
+                    const targetX = Math.cos(data.pullTarget.angle) * data.pullTarget.radius;
+                    const targetZ = Math.sin(data.pullTarget.angle) * data.pullTarget.radius;
+                    const end = new THREE.Vector3(targetX, 0, targetZ);
+
+                    const pullPoint = start.clone().lerp(end, data.pullProgress);
+
+                    const geometry = new THREE.BufferGeometry().setFromPoints([start, pullPoint]);
+                    const material = new THREE.LineBasicMaterial({
+                        color: 0xff00ff,
+                        transparent: true,
+                        opacity: 0.8,
+                        blending: THREE.AdditiveBlending
+                    });
+
+                    const line = new THREE.Line(geometry, material);
+                    connectionLines.push(line);
+                    scene.add(line);
+
+                    // Glow at pull point
+                    if (data.pullProgress > 0.5) {
+                        const glowGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+                        const glowMaterial = new THREE.MeshBasicMaterial({
+                            color: 0x8844ff,
+                            transparent: true,
+                            opacity: (data.pullProgress - 0.5) * 2,
+                            blending: THREE.AdditiveBlending
+                        });
+                        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                        glow.position.copy(pullPoint);
+                        connectionLines.push(glow);
+                        scene.add(glow);
+                    }
+                }
+            });
+        }
+
+        function updateMatrixCore() {
+            if (!matrixCore) return;
+
+            // Pulse effect
+            const pulse = 1 + Math.sin(time * 3) * 0.1;
+            matrixCore.children[0].scale.setScalar(pulse);
+            matrixCore.children[1].scale.setScalar(pulse);
+
+            // Rotate orbital rings (now starting at index 2 since we removed outer glow)
+            for (let i = 2; i < matrixCore.children.length; i++) {
+                const ring = matrixCore.children[i];
+                const data = ring.userData;
+                ring.rotateOnAxis(data.axis, data.rotationSpeed * 0.02);
+            }
+        }
+
+        function updateRealmRings() {
+            realmRings.forEach(ring => {
+                ring.material.uniforms.time.value = time;
+            });
+        }
+
+        function updateFPS() {
+            frameCount++;
+            if (time - lastFpsUpdate >= 1) {
+                fpsElement.textContent = `FPS: ${frameCount}`;
+                frameCount = 0;
+                lastFpsUpdate = time;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+
+            // Update post-processing uniforms
+            composer.passes.forEach(pass => {
+                if (pass.uniforms && pass.uniforms.resolution) {
+                    pass.uniforms.resolution.value.set(window.innerWidth, window.innerHeight);
+                }
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            time += delta;
+
+            // Update controls
+            controls.update();
+
+            // Update all systems
+            updateEntities(delta);
+            updateParticles(delta);
+            updateConnections();
+            updateMatrixCore();
+            updateRealmRings();
+            updateFPS();
+
+            // Update post-processing time
+            composer.passes.forEach(pass => {
+                if (pass.uniforms && pass.uniforms.time) {
+                    pass.uniforms.time.value = time;
+                }
+            });
+
+            // Render
+            composer.render();
+        }
+
+        // Initialize
+        init();
+    </script>
+</body>
+</html>
