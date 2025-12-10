@@ -45,10 +45,10 @@
         #legend h2 {
             font-size: 14px;
             margin-bottom: 15px;
-            color: #0ff;
+            color: #ff4488;
             text-transform: uppercase;
             letter-spacing: 2px;
-            text-shadow: 0 0 20px #0ff;
+            text-shadow: 0 0 20px #ff4488;
         }
 
         .legend-section {
@@ -86,13 +86,13 @@
             background: transparent;
         }
 
-        .dot-normie { background: #4a9eff; color: #4a9eff; }
-        .dot-operator { background: #00ff88; color: #00ff88; }
+        .dot-normie { background: #ff4488; color: #ff4488; }
+        .dot-operator { background: #ff6622; color: #ff6622; }
         .dot-agent { background: #ff00ff; color: #ff00ff; }
 
         .circle-matrix { border-color: #ff0044; }
-        .circle-internet { border-color: #4a9eff; }
-        .circle-ide { border-color: #00ff88; }
+        .circle-internet { border-color: #ff4488; }
+        .circle-ide { border-color: #ff6622; }
         .circle-meta { border-color: #ff00ff; }
         .circle-latent { border-color: #8844ff; }
 
@@ -105,8 +105,8 @@
         #info h2 {
             font-size: 14px;
             margin-bottom: 15px;
-            color: #0ff;
-            text-shadow: 0 0 20px #0ff;
+            color: #ff4488;
+            text-shadow: 0 0 20px #ff4488;
         }
 
         #info p {
@@ -131,12 +131,12 @@
             text-align: center;
             letter-spacing: 8px;
             text-transform: uppercase;
-            text-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
+            text-shadow: 0 0 40px rgba(255, 68, 136, 0.5);
         }
 
         #title span {
-            color: #0ff;
-            text-shadow: 0 0 30px #0ff, 0 0 60px #0ff;
+            color: #ff4488;
+            text-shadow: 0 0 30px #ff4488, 0 0 60px #ff4488;
         }
 
         #controls {
@@ -154,7 +154,7 @@
             left: 20px;
             z-index: 100;
             font-size: 10px;
-            color: #0ff;
+            color: #ff4488;
             font-family: 'Courier New', monospace;
         }
 
@@ -291,20 +291,20 @@
         const CONFIG = {
             realms: {
                 matrix: { radius: 0.8, color: new THREE.Color(0xff0044), name: 'MATRIX' },
-                internet: { radius: 2.4, color: new THREE.Color(0x4a9eff), name: 'INTERNET' },
-                ide: { radius: 4.0, color: new THREE.Color(0x00ff88), name: 'IDE' },
+                internet: { radius: 2.4, color: new THREE.Color(0xff4488), name: 'INTERNET' },
+                ide: { radius: 4.0, color: new THREE.Color(0xff6622), name: 'IDE' },
                 meta: { radius: 5.6, color: new THREE.Color(0xff00ff), name: 'META' },
                 latent: { radius: 7.5, color: new THREE.Color(0x8844ff), name: 'LATENT SPACE' }
             },
             entities: {
-                normies: 80,
-                operators: 15,
-                agents: 10
+                normies: 50,
+                operators: 10,
+                agents: 8
             },
             particles: {
-                latentCount: 800,
-                dataStreamCount: 200,
-                nebulaCount: 800
+                latentCount: 400,
+                dataStreamCount: 100,
+                nebulaCount: 300
             }
         };
 
@@ -390,16 +390,16 @@
 
                     vec3 color = vec3(r, g, b);
 
-                    // Color grading - boost cyans and magentas
-                    color.r *= 0.95;
-                    color.g *= 1.05;
-                    color.b *= 1.1;
+                    // Color grading - boost reds and magentas
+                    color.r *= 1.1;
+                    color.g *= 0.9;
+                    color.b *= 1.0;
 
-                    // Vignette with color tint
+                    // Vignette with warm tint
                     float vignette = 1.0 - dist * 0.7;
                     vignette = smoothstep(0.0, 1.0, vignette);
                     color *= vignette;
-                    color += vec3(0.0, 0.02, 0.04) * (1.0 - vignette); // Blue tint in corners
+                    color += vec3(0.04, 0.01, 0.02) * (1.0 - vignette); // Warm tint in corners
 
                     // Subtle scanlines
                     float scanline = sin(uv.y * resolution.y * 0.5 + time * 2.0) * 0.015 + 1.0;
@@ -575,24 +575,26 @@
             animate();
         }
 
+        let gtaoPass; // Reference for deferred enabling
+
         function setupPostProcessing() {
             composer = new EffectComposer(renderer);
 
             const renderPass = new RenderPass(scene, camera);
             composer.addPass(renderPass);
 
-            // GTAO for ambient occlusion (r182 feature) - optimized settings
-            const gtaoPass = new GTAOPass(scene, camera, window.innerWidth / 2, window.innerHeight / 2);
+            // GTAO disabled on load for faster startup - enabled after first frame
+            gtaoPass = new GTAOPass(scene, camera, window.innerWidth / 2, window.innerHeight / 2);
             gtaoPass.output = GTAOPass.OUTPUT.Default;
-            gtaoPass.enabled = true;
+            gtaoPass.enabled = false; // Defer for faster load
             composer.addPass(gtaoPass);
 
             // Bloom - very subtle
             const bloomPass = new UnrealBloomPass(
                 new THREE.Vector2(window.innerWidth, window.innerHeight),
-                0.02,  // strength - halved again
-                0.15,  // radius
-                0.97   // threshold - very high = minimal bloom
+                0.02,
+                0.15,
+                0.97
             );
             composer.addPass(bloomPass);
 
@@ -607,9 +609,9 @@
         }
 
         function createEnvironment() {
-            // Enhanced starfield with variable sizes and colors
+            // Starfield - reduced count for faster load
             const starsGeometry = new THREE.BufferGeometry();
-            const starsCount = 8000;
+            const starsCount = 3000;
             const positions = new Float32Array(starsCount * 3);
             const colors = new Float32Array(starsCount * 3);
             const sizes = new Float32Array(starsCount);
@@ -623,23 +625,20 @@
                 positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
                 positions[i * 3 + 2] = radius * Math.cos(phi);
 
-                // More varied star colors
+                // Warm star colors - reds, oranges, magentas, purples
                 const colorChoice = Math.random();
-                if (colorChoice < 0.2) {
-                    // Blue-white
-                    colors[i * 3] = 0.7; colors[i * 3 + 1] = 0.85; colors[i * 3 + 2] = 1.0;
-                } else if (colorChoice < 0.4) {
-                    // Pure white
-                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
-                } else if (colorChoice < 0.6) {
-                    // Yellow-white
-                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.95; colors[i * 3 + 2] = 0.8;
-                } else if (colorChoice < 0.8) {
-                    // Purple tint
-                    colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.6; colors[i * 3 + 2] = 1.0;
+                if (colorChoice < 0.25) {
+                    // Red-pink
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.4; colors[i * 3 + 2] = 0.6;
+                } else if (colorChoice < 0.5) {
+                    // Orange
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.6; colors[i * 3 + 2] = 0.3;
+                } else if (colorChoice < 0.75) {
+                    // Magenta
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 0.8;
                 } else {
-                    // Cyan tint
-                    colors[i * 3] = 0.5; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
+                    // Purple
+                    colors[i * 3] = 0.7; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 1.0;
                 }
 
                 sizes[i] = Math.random() * 2.5 + 0.5;
@@ -681,12 +680,12 @@
                 positions[i * 3 + 1] = y;
                 positions[i * 3 + 2] = Math.sin(angle) * radius + (Math.random() - 0.5) * 2;
 
-                // Purple to blue to pink gradient
+                // Purple to magenta to red gradient
                 const t = Math.random();
                 if (t < 0.33) {
-                    colors[i * 3] = 0.4 + t; colors[i * 3 + 1] = 0.2; colors[i * 3 + 2] = 0.8;
+                    colors[i * 3] = 0.6 + t; colors[i * 3 + 1] = 0.15; colors[i * 3 + 2] = 0.7;
                 } else if (t < 0.66) {
-                    colors[i * 3] = 0.3; colors[i * 3 + 1] = 0.4; colors[i * 3 + 2] = 1.0;
+                    colors[i * 3] = 0.9; colors[i * 3 + 1] = 0.2; colors[i * 3 + 2] = 0.5;
                 } else {
                     colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.2; colors[i * 3 + 2] = 0.6;
                 }
@@ -717,8 +716,8 @@
             Object.entries(CONFIG.realms).forEach(([key, realm], index) => {
                 if (key === 'matrix') return; // Matrix core handled separately
 
-                // Main ring with enhanced shader
-                const ringGeometry = new THREE.TorusGeometry(realm.radius, 0.04, 16, 128);
+                // Main ring with enhanced shader - reduced segments
+                const ringGeometry = new THREE.TorusGeometry(realm.radius, 0.04, 8, 64);
                 const ringMaterial = new THREE.ShaderMaterial({
                     uniforms: {
                         color: { value: realm.color },
@@ -737,8 +736,8 @@
                 scene.add(ring);
                 realmRings.push({ mesh: ring, material: ringMaterial });
 
-                // Secondary pulse ring
-                const pulseGeometry = new THREE.TorusGeometry(realm.radius, 0.12, 8, 128);
+                // Secondary pulse ring - reduced segments
+                const pulseGeometry = new THREE.TorusGeometry(realm.radius, 0.12, 6, 48);
                 const pulseMaterial = new THREE.MeshBasicMaterial({
                     color: realm.color,
                     transparent: true,
@@ -749,13 +748,13 @@
                 pulseRing.rotation.x = Math.PI / 2;
                 scene.add(pulseRing);
 
-                // Vertical energy pillars with height variation
+                // Vertical energy pillars - reduced count and segments
                 if (key !== 'latent') {
-                    const pillarCount = key === 'internet' ? 8 : key === 'ide' ? 12 : 16;
+                    const pillarCount = key === 'internet' ? 6 : key === 'ide' ? 8 : 10;
                     for (let i = 0; i < pillarCount; i++) {
                         const angle = (i / pillarCount) * Math.PI * 2;
                         const height = 0.3 + Math.random() * 0.5;
-                        const pillarGeometry = new THREE.CylinderGeometry(0.015, 0.025, height, 8);
+                        const pillarGeometry = new THREE.CylinderGeometry(0.015, 0.025, height, 6);
                         const pillarMaterial = new THREE.MeshBasicMaterial({
                             color: realm.color,
                             transparent: true,
@@ -777,8 +776,8 @@
         function createMatrixCore() {
             const coreGroup = new THREE.Group();
 
-            // Central sphere - reduced segments, use StandardMaterial
-            const coreGeometry = new THREE.SphereGeometry(0.35, 32, 32);
+            // Central sphere - optimized segments
+            const coreGeometry = new THREE.SphereGeometry(0.35, 20, 20);
             const coreMaterial = new THREE.MeshStandardMaterial({
                 color: 0xff0044,
                 emissive: 0xff0022,
@@ -790,8 +789,8 @@
             core.castShadow = true;
             coreGroup.add(core);
 
-            // Inner glow - reduced segments
-            const glowGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+            // Inner glow - optimized
+            const glowGeometry = new THREE.SphereGeometry(0.5, 10, 10);
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
@@ -801,8 +800,8 @@
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
             coreGroup.add(glow);
 
-            // Outer pulse glow - reduced segments
-            const outerGlowGeometry = new THREE.SphereGeometry(0.7, 12, 12);
+            // Outer pulse glow - optimized
+            const outerGlowGeometry = new THREE.SphereGeometry(0.7, 8, 8);
             const outerGlowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
@@ -812,9 +811,9 @@
             const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
             coreGroup.add(outerGlow);
 
-            // Multiple orbiting rings at different angles
-            for (let i = 0; i < 4; i++) {
-                const orbitGeometry = new THREE.TorusGeometry(0.55 + i * 0.12, 0.012, 8, 64);
+            // Orbiting rings - reduced count and segments
+            for (let i = 0; i < 3; i++) {
+                const orbitGeometry = new THREE.TorusGeometry(0.55 + i * 0.15, 0.012, 6, 32);
                 const orbitMaterial = new THREE.MeshBasicMaterial({
                     color: 0xff0044,
                     transparent: true,
@@ -836,9 +835,9 @@
         }
 
         function createEntities() {
-            // Normies (in Internet realm)
+            // Normies (in Internet realm) - magenta tint
             for (let i = 0; i < CONFIG.entities.normies; i++) {
-                const normie = createEntity(0x4a9eff, 0.08);
+                const normie = createEntity(0xff4488, 0.08);
                 const angle = Math.random() * Math.PI * 2;
                 const radius = CONFIG.realms.matrix.radius + 0.3 + Math.random() * (CONFIG.realms.internet.radius - CONFIG.realms.matrix.radius - 0.5);
 
@@ -857,9 +856,9 @@
                 scene.add(normie);
             }
 
-            // Operators (in IDE realm)
+            // Operators (in IDE realm) - warm orange/red
             for (let i = 0; i < CONFIG.entities.operators; i++) {
-                const operator = createEntity(0x00ff88, 0.12);
+                const operator = createEntity(0xff6622, 0.12);
                 const angle = Math.random() * Math.PI * 2;
                 const radius = CONFIG.realms.internet.radius + 0.3 + Math.random() * (CONFIG.realms.ide.radius - CONFIG.realms.internet.radius - 0.5);
 
@@ -916,14 +915,14 @@
             }
         }
 
-        // Cached geometries for entities (optimization)
+        // Cached geometries for entities - reduced segments
         const entityGeometries = {
-            normie: new THREE.SphereGeometry(0.08, 12, 12),
-            normieGlow: new THREE.SphereGeometry(0.16, 8, 8),
-            operator: new THREE.SphereGeometry(0.12, 12, 12),
-            operatorGlow: new THREE.SphereGeometry(0.24, 8, 8),
-            agent: new THREE.SphereGeometry(0.15, 12, 12),
-            agentGlow: new THREE.SphereGeometry(0.3, 8, 8)
+            normie: new THREE.SphereGeometry(0.08, 8, 8),
+            normieGlow: new THREE.SphereGeometry(0.16, 6, 6),
+            operator: new THREE.SphereGeometry(0.12, 8, 8),
+            operatorGlow: new THREE.SphereGeometry(0.24, 6, 6),
+            agent: new THREE.SphereGeometry(0.15, 10, 10),
+            agentGlow: new THREE.SphereGeometry(0.3, 6, 6)
         };
 
         function createEntity(color, size) {
@@ -984,11 +983,11 @@
                 positions[i * 3 + 1] = y;
                 positions[i * 3 + 2] = Math.sin(angle) * radius;
 
-                // More vibrant purple to cyan gradient
+                // Purple to magenta gradient
                 const t = Math.random();
-                colors[i * 3] = 0.4 + t * 0.4;
-                colors[i * 3 + 1] = 0.2 + t * 0.5;
-                colors[i * 3 + 2] = 0.9 + t * 0.1;
+                colors[i * 3] = 0.6 + t * 0.4;
+                colors[i * 3 + 1] = 0.2 + t * 0.2;
+                colors[i * 3 + 2] = 0.7 + t * 0.3;
 
                 sizes[i] = Math.random() * 4 + 1;
 
@@ -1061,17 +1060,17 @@
                 positions[i * 3 + 1] = (Math.random() - 0.5) * 1.5;
                 positions[i * 3 + 2] = Math.sin(angle) * radius;
 
-                // Varied data colors
+                // Warm data colors - reds, oranges, magentas
                 const colorType = Math.random();
-                if (colorType < 0.6) {
-                    // Cyan
-                    colors[i * 3] = 0.3; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
-                } else if (colorType < 0.8) {
-                    // Green
-                    colors[i * 3] = 0.3; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 0.5;
+                if (colorType < 0.4) {
+                    // Magenta-pink
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 0.6;
+                } else if (colorType < 0.7) {
+                    // Orange-red
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.2;
                 } else {
-                    // White
-                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0;
+                    // Purple
+                    colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 1.0;
                 }
 
                 sizes[i] = Math.random() * 4 + 1;
@@ -1109,8 +1108,8 @@
         function createGridFloor() {
             const gridGroup = new THREE.Group();
 
-            // Radial lines
-            const radialCount = 48;
+            // Radial lines - reduced count
+            const radialCount = 24;
             for (let i = 0; i < radialCount; i++) {
                 const angle = (i / radialCount) * Math.PI * 2;
                 const geometry = new THREE.BufferGeometry();
@@ -1130,10 +1129,10 @@
                 gridGroup.add(line);
             }
 
-            // Concentric circles
-            for (let r = 1; r <= 12; r++) {
+            // Concentric circles - fewer with reduced segments
+            for (let r = 2; r <= 12; r += 2) {
                 const geometry = new THREE.BufferGeometry();
-                const segments = 96;
+                const segments = 48;
                 const positions = new Float32Array((segments + 1) * 3);
 
                 for (let i = 0; i <= segments; i++) {
@@ -1175,8 +1174,8 @@
 
             // Realm accent lights
             const realmLights = [
-                { color: 0x4a9eff, radius: 2.4, intensity: 1.5 },
-                { color: 0x00ff88, radius: 4.0, intensity: 1.2 },
+                { color: 0xff4488, radius: 2.4, intensity: 1.5 },
+                { color: 0xff6622, radius: 4.0, intensity: 1.2 },
                 { color: 0xff00ff, radius: 5.6, intensity: 1.0 },
                 { color: 0x8844ff, radius: 7.5, intensity: 0.8 }
             ];
@@ -1339,22 +1338,22 @@
             lineIdx: 0,
             packetIdx: 0,
             glowIdx: 0,
-            packetGeom: new THREE.SphereGeometry(0.035, 6, 6),
-            glowGeom: new THREE.SphereGeometry(0.12, 8, 8),
+            packetGeom: new THREE.SphereGeometry(0.035, 4, 4),
+            glowGeom: new THREE.SphereGeometry(0.12, 6, 6),
             initialized: false
         };
 
         function initConnectionPool() {
-            // Pre-allocate pool objects
-            const maxLines = 20;
-            const maxPackets = 80;
-            const maxGlows = 15;
+            // Pre-allocate pool objects - reduced for faster load
+            const maxLines = 12;
+            const maxPackets = 30;
+            const maxGlows = 10;
 
             for (let i = 0; i < maxLines; i++) {
                 const geometry = new THREE.BufferGeometry();
                 geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(31 * 3), 3));
                 const material = new THREE.LineBasicMaterial({
-                    color: 0x00ff88,
+                    color: 0xff6622,
                     transparent: true,
                     opacity: 0,
                     blending: THREE.AdditiveBlending
@@ -1368,7 +1367,7 @@
 
             for (let i = 0; i < maxPackets; i++) {
                 const material = new THREE.MeshBasicMaterial({
-                    color: 0xffffff,
+                    color: 0xff4488,
                     transparent: true,
                     opacity: 0,
                     blending: THREE.AdditiveBlending
@@ -1434,7 +1433,7 @@
                         positions[i * 3 + 2] = tempPos.z;
                     }
                     line.geometry.attributes.position.needsUpdate = true;
-                    line.material.color.setHex(0x00ff88);
+                    line.material.color.setHex(0xff6622);
                     line.material.opacity = data.connectionStrength * 0.9;
                     line.visible = true;
 
@@ -1537,11 +1536,19 @@
             });
         }
 
+        let frameNumber = 0;
+
         function animate() {
             requestAnimationFrame(animate);
 
             const delta = clock.getDelta();
             time += delta;
+            frameNumber++;
+
+            // Enable GTAO after first few frames for smoother startup
+            if (frameNumber === 3 && gtaoPass) {
+                gtaoPass.enabled = true;
+            }
 
             controls.update();
 
