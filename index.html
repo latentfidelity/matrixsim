@@ -165,37 +165,40 @@
             z-index: 100;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 14px 8px 10px;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            padding: 0;
             background: linear-gradient(
                 135deg,
-                rgba(255, 255, 255, 0.12) 0%,
+                rgba(255, 255, 255, 0.15) 0%,
                 rgba(255, 255, 255, 0.05) 50%,
-                rgba(255, 255, 255, 0.08) 100%
+                rgba(255, 255, 255, 0.1) 100%
             );
             backdrop-filter: blur(40px) saturate(180%);
             -webkit-backdrop-filter: blur(40px) saturate(180%);
-            border-radius: 50px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.25);
             box-shadow:
                 0 8px 32px rgba(0, 0, 0, 0.25),
                 inset 0 1px 1px rgba(255, 255, 255, 0.25),
                 inset 0 -1px 1px rgba(0, 0, 0, 0.15);
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #wombo-badge:hover {
+            transform: scale(1.08);
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.35),
+                inset 0 1px 1px rgba(255, 255, 255, 0.3),
+                inset 0 -1px 1px rgba(0, 0, 0, 0.15);
         }
 
         #wombo-badge img {
-            width: 24px;
-            height: 24px;
+            width: 28px;
+            height: 28px;
             filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
-        }
-
-        #wombo-badge span {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
-            font-size: 12px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.95);
-            letter-spacing: 0.2px;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
         }
     </style>
 </head>
@@ -204,10 +207,9 @@
 
     <div id="title">DIGITAL <span>REALM</span> SIMULATION</div>
     <div id="fps">FPS: 60</div>
-    <div id="wombo-badge">
+    <a href="https://w.ai/" target="_blank" rel="noopener noreferrer" id="wombo-badge">
         <img src="wombo.png" alt="WOMBO">
-        <span>WOMBO Research</span>
-    </div>
+    </a>
 
     <div class="ui-panel" id="legend">
         <h2>Legend</h2>
@@ -1100,15 +1102,14 @@
 
                 const material = new THREE.SpriteMaterial({
                     map: Math.random() > 0.5 ? tex0 : tex1,
-                    color: 0x000000,
                     transparent: true,
-                    opacity: 0.4 + Math.random() * 0.3,
+                    opacity: 0.6 + Math.random() * 0.3,
                     depthWrite: false,
-                    alphaTest: 0.05
+                    alphaTest: 0.1
                 });
 
                 const sprite = new THREE.Sprite(material);
-                const scale = 0.08 + Math.random() * 0.12;
+                const scale = 0.15 + Math.random() * 0.15;
                 sprite.scale.set(scale, scale, 1);
                 sprite.position.set(
                     Math.cos(angle) * radius,
@@ -1134,36 +1135,41 @@
         }
 
         function createBinaryTextureChar(char) {
+            const size = 128;
             const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d', { alpha: true });
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
 
-            // Clear canvas
-            ctx.clearRect(0, 0, 128, 128);
-
-            // Draw WHITE text - we'll colorize it black via material.color
+            // Start with opaque white background
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 100px monospace';
+            ctx.fillRect(0, 0, size, size);
+
+            // Draw black text
+            ctx.fillStyle = '#000000';
+            ctx.font = `bold ${size * 0.8}px "Consolas", monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(char, 64, 68);
+            ctx.fillText(char, size / 2, size / 2 + 4);
 
-            // Get image data and set alpha from luminance
-            const imageData = ctx.getImageData(0, 0, 128, 128);
+            // Now convert: white -> transparent, black -> opaque black
+            const imageData = ctx.getImageData(0, 0, size, size);
             const data = imageData.data;
             for (let i = 0; i < data.length; i += 4) {
-                // Use red channel as alpha (white text = high alpha)
-                const alpha = data[i];
-                data[i] = 255;     // R - will be tinted by material color
-                data[i + 1] = 255; // G
-                data[i + 2] = 255; // B
-                data[i + 3] = alpha; // A - from original luminance
+                // Calculate luminance (how white the pixel is)
+                const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                // Invert: white (255) becomes transparent (0), black (0) becomes opaque (255)
+                const alpha = 255 - lum;
+                // Keep the pixel black, just vary the alpha
+                data[i] = 0;       // R
+                data[i + 1] = 0;   // G
+                data[i + 2] = 0;   // B
+                data[i + 3] = alpha; // A
             }
             ctx.putImageData(imageData, 0, 0);
 
             const texture = new THREE.CanvasTexture(canvas);
-            texture.premultiplyAlpha = false;
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.needsUpdate = true;
             return texture;
         }
