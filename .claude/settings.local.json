@@ -12,7 +12,9 @@
       "Bash(gh:*)",
       "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" --version)",
       "Bash(python:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(git rm:*)",
+      "Bash(git hash-object:*)"
     ]
   }
 }

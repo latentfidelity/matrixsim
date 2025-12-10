@@ -581,8 +581,8 @@
             const renderPass = new RenderPass(scene, camera);
             composer.addPass(renderPass);
 
-            // GTAO for ambient occlusion (r182 feature)
-            const gtaoPass = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
+            // GTAO for ambient occlusion (r182 feature) - optimized settings
+            const gtaoPass = new GTAOPass(scene, camera, window.innerWidth / 2, window.innerHeight / 2);
             gtaoPass.output = GTAOPass.OUTPUT.Default;
             gtaoPass.enabled = true;
             composer.addPass(gtaoPass);
@@ -777,25 +777,21 @@
         function createMatrixCore() {
             const coreGroup = new THREE.Group();
 
-            // Central sphere with physical material
-            const coreGeometry = new THREE.SphereGeometry(0.35, 64, 64);
-            const coreMaterial = new THREE.MeshPhysicalMaterial({
+            // Central sphere - reduced segments, use StandardMaterial
+            const coreGeometry = new THREE.SphereGeometry(0.35, 32, 32);
+            const coreMaterial = new THREE.MeshStandardMaterial({
                 color: 0xff0044,
                 emissive: 0xff0022,
-                emissiveIntensity: 0.5,
-                metalness: 0.9,
-                roughness: 0.1,
-                clearcoat: 1.0,
-                clearcoatRoughness: 0.1,
-                transparent: true,
-                opacity: 0.95
+                emissiveIntensity: 0.6,
+                metalness: 0.8,
+                roughness: 0.15
             });
             const core = new THREE.Mesh(coreGeometry, coreMaterial);
             core.castShadow = true;
             coreGroup.add(core);
 
-            // Inner glow
-            const glowGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            // Inner glow - reduced segments
+            const glowGeometry = new THREE.SphereGeometry(0.5, 16, 16);
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
@@ -805,8 +801,8 @@
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
             coreGroup.add(glow);
 
-            // Outer pulse glow
-            const outerGlowGeometry = new THREE.SphereGeometry(0.7, 32, 32);
+            // Outer pulse glow - reduced segments
+            const outerGlowGeometry = new THREE.SphereGeometry(0.7, 12, 12);
             const outerGlowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
@@ -920,33 +916,51 @@
             }
         }
 
+        // Cached geometries for entities (optimization)
+        const entityGeometries = {
+            normie: new THREE.SphereGeometry(0.08, 12, 12),
+            normieGlow: new THREE.SphereGeometry(0.16, 8, 8),
+            operator: new THREE.SphereGeometry(0.12, 12, 12),
+            operatorGlow: new THREE.SphereGeometry(0.24, 8, 8),
+            agent: new THREE.SphereGeometry(0.15, 12, 12),
+            agentGlow: new THREE.SphereGeometry(0.3, 8, 8)
+        };
+
         function createEntity(color, size) {
             const group = new THREE.Group();
 
-            // Core sphere with physical material
-            const coreGeometry = new THREE.SphereGeometry(size, 24, 24);
-            const coreMaterial = new THREE.MeshPhysicalMaterial({
+            // Determine which cached geometry to use
+            let coreGeom, glowGeom;
+            if (size <= 0.09) {
+                coreGeom = entityGeometries.normie;
+                glowGeom = entityGeometries.normieGlow;
+            } else if (size <= 0.13) {
+                coreGeom = entityGeometries.operator;
+                glowGeom = entityGeometries.operatorGlow;
+            } else {
+                coreGeom = entityGeometries.agent;
+                glowGeom = entityGeometries.agentGlow;
+            }
+
+            // Core sphere - use MeshStandardMaterial (faster than Physical)
+            const coreMaterial = new THREE.MeshStandardMaterial({
                 color: color,
                 emissive: color,
-                emissiveIntensity: 0.2,
-                metalness: 0.7,
-                roughness: 0.2,
-                clearcoat: 0.8,
-                transparent: true,
-                opacity: 0.95
+                emissiveIntensity: 0.3,
+                metalness: 0.6,
+                roughness: 0.3
             });
-            const core = new THREE.Mesh(coreGeometry, coreMaterial);
+            const core = new THREE.Mesh(coreGeom, coreMaterial);
             group.add(core);
 
             // Glow sphere
-            const glowGeometry = new THREE.SphereGeometry(size * 2, 16, 16);
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: color,
                 transparent: true,
-                opacity: 0.015,
+                opacity: 0.02,
                 blending: THREE.AdditiveBlending
             });
-            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            const glow = new THREE.Mesh(glowGeom, glowMaterial);
             group.add(glow);
 
             return group;
@@ -1317,56 +1331,122 @@
             }
         }
 
+        // Connection pool for reuse (optimization)
+        const connectionPool = {
+            lines: [],
+            packets: [],
+            glows: [],
+            lineIdx: 0,
+            packetIdx: 0,
+            glowIdx: 0,
+            packetGeom: new THREE.SphereGeometry(0.035, 6, 6),
+            glowGeom: new THREE.SphereGeometry(0.12, 8, 8),
+            initialized: false
+        };
+
+        function initConnectionPool() {
+            // Pre-allocate pool objects
+            const maxLines = 20;
+            const maxPackets = 80;
+            const maxGlows = 15;
+
+            for (let i = 0; i < maxLines; i++) {
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(31 * 3), 3));
+                const material = new THREE.LineBasicMaterial({
+                    color: 0x00ff88,
+                    transparent: true,
+                    opacity: 0,
+                    blending: THREE.AdditiveBlending
+                });
+                const line = new THREE.Line(geometry, material);
+                line.visible = false;
+                line.frustumCulled = false;
+                connectionPool.lines.push(line);
+                scene.add(line);
+            }
+
+            for (let i = 0; i < maxPackets; i++) {
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0,
+                    blending: THREE.AdditiveBlending
+                });
+                const packet = new THREE.Mesh(connectionPool.packetGeom, material);
+                packet.visible = false;
+                connectionPool.packets.push(packet);
+                scene.add(packet);
+            }
+
+            for (let i = 0; i < maxGlows; i++) {
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0x8844ff,
+                    transparent: true,
+                    opacity: 0,
+                    blending: THREE.AdditiveBlending
+                });
+                const glow = new THREE.Mesh(connectionPool.glowGeom, material);
+                glow.visible = false;
+                connectionPool.glows.push(glow);
+                scene.add(glow);
+            }
+
+            connectionPool.initialized = true;
+        }
+
         function updateConnections() {
-            // Remove old connection lines
-            connectionLines.forEach(line => scene.remove(line));
-            connectionLines = [];
+            if (!connectionPool.initialized) initConnectionPool();
+
+            // Reset pool indices and hide all
+            connectionPool.lines.forEach(l => l.visible = false);
+            connectionPool.packets.forEach(p => p.visible = false);
+            connectionPool.glows.forEach(g => g.visible = false);
+            connectionPool.lineIdx = 0;
+            connectionPool.packetIdx = 0;
+            connectionPool.glowIdx = 0;
+
+            // Reusable vectors
+            const midPoint = new THREE.Vector3();
+            const tempPos = new THREE.Vector3();
 
             // Draw operator connections
             operators.forEach(operator => {
                 const data = operator.userData;
-                if (data.connectionStrength > 0.1 && data.connectionTarget) {
+                if (data.connectionStrength > 0.1 && data.connectionTarget && connectionPool.lineIdx < connectionPool.lines.length) {
                     const start = operator.position;
                     const end = data.connectionTarget.position;
 
-                    const midPoint = new THREE.Vector3(
+                    midPoint.set(
                         (start.x + end.x) / 2,
                         Math.max(start.y, end.y) + 0.6,
                         (start.z + end.z) / 2
                     );
 
                     const curve = new THREE.QuadraticBezierCurve3(start, midPoint, end);
-                    const points = curve.getPoints(30);
-                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    const line = connectionPool.lines[connectionPool.lineIdx++];
+                    const positions = line.geometry.attributes.position.array;
 
-                    const material = new THREE.LineBasicMaterial({
-                        color: 0x00ff88,
-                        transparent: true,
-                        opacity: data.connectionStrength * 0.9,
-                        blending: THREE.AdditiveBlending
-                    });
+                    for (let i = 0; i <= 30; i++) {
+                        curve.getPoint(i / 30, tempPos);
+                        positions[i * 3] = tempPos.x;
+                        positions[i * 3 + 1] = tempPos.y;
+                        positions[i * 3 + 2] = tempPos.z;
+                    }
+                    line.geometry.attributes.position.needsUpdate = true;
+                    line.material.color.setHex(0x00ff88);
+                    line.material.opacity = data.connectionStrength * 0.9;
+                    line.visible = true;
 
-                    const line = new THREE.Line(geometry, material);
-                    connectionLines.push(line);
-                    scene.add(line);
+                    // Data packets (reduced from 4 to 2)
+                    for (let i = 0; i < 2 && connectionPool.packetIdx < connectionPool.packets.length; i++) {
+                        const t = ((time * 0.6 + i / 2) % 1);
+                        curve.getPoint(t, tempPos);
 
-                    // Data packets
-                    const packetCount = 4;
-                    for (let i = 0; i < packetCount; i++) {
-                        const t = ((time * 0.6 + i / packetCount) % 1);
-                        const pos = curve.getPoint(t);
-
-                        const packetGeometry = new THREE.SphereGeometry(0.035, 12, 12);
-                        const packetMaterial = new THREE.MeshBasicMaterial({
-                            color: 0xffffff,
-                            transparent: true,
-                            opacity: data.connectionStrength * (1 - t) * 1.2,
-                            blending: THREE.AdditiveBlending
-                        });
-                        const packet = new THREE.Mesh(packetGeometry, packetMaterial);
-                        packet.position.copy(pos);
-                        connectionLines.push(packet);
-                        scene.add(packet);
+                        const packet = connectionPool.packets[connectionPool.packetIdx++];
+                        packet.position.copy(tempPos);
+                        packet.material.opacity = data.connectionStrength * (1 - t) * 1.2;
+                        packet.visible = true;
                     }
                 }
             });
@@ -1374,39 +1454,30 @@
             // Draw agent pull beams
             agents.forEach(agent => {
                 const data = agent.userData;
-                if (data.isPulling && data.pullTarget) {
+                if (data.isPulling && data.pullTarget && connectionPool.lineIdx < connectionPool.lines.length) {
                     const start = agent.position;
                     const targetX = Math.cos(data.pullTarget.angle) * data.pullTarget.radius;
                     const targetZ = Math.sin(data.pullTarget.angle) * data.pullTarget.radius;
-                    const end = new THREE.Vector3(targetX, 0, targetZ);
 
-                    const pullPoint = start.clone().lerp(end, data.pullProgress);
+                    tempPos.set(targetX, 0, targetZ);
+                    const pullPoint = start.clone().lerp(tempPos, data.pullProgress);
 
-                    const geometry = new THREE.BufferGeometry().setFromPoints([start, pullPoint]);
-                    const material = new THREE.LineBasicMaterial({
-                        color: 0xff00ff,
-                        transparent: true,
-                        opacity: 0.9,
-                        blending: THREE.AdditiveBlending
-                    });
+                    const line = connectionPool.lines[connectionPool.lineIdx++];
+                    const positions = line.geometry.attributes.position.array;
+                    positions[0] = start.x; positions[1] = start.y; positions[2] = start.z;
+                    positions[3] = pullPoint.x; positions[4] = pullPoint.y; positions[5] = pullPoint.z;
+                    line.geometry.setDrawRange(0, 2);
+                    line.geometry.attributes.position.needsUpdate = true;
+                    line.material.color.setHex(0xff00ff);
+                    line.material.opacity = 0.9;
+                    line.visible = true;
 
-                    const line = new THREE.Line(geometry, material);
-                    connectionLines.push(line);
-                    scene.add(line);
-
-                    // Glow at pull point
-                    if (data.pullProgress > 0.3) {
-                        const glowGeometry = new THREE.SphereGeometry(0.12 * data.pullProgress, 16, 16);
-                        const glowMaterial = new THREE.MeshBasicMaterial({
-                            color: 0x8844ff,
-                            transparent: true,
-                            opacity: data.pullProgress * 0.8,
-                            blending: THREE.AdditiveBlending
-                        });
-                        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                    if (data.pullProgress > 0.3 && connectionPool.glowIdx < connectionPool.glows.length) {
+                        const glow = connectionPool.glows[connectionPool.glowIdx++];
                         glow.position.copy(pullPoint);
-                        connectionLines.push(glow);
-                        scene.add(glow);
+                        glow.scale.setScalar(data.pullProgress);
+                        glow.material.opacity = data.pullProgress * 0.8;
+                        glow.visible = true;
                     }
                 }
             });
