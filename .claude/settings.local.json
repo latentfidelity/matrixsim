@@ -9,7 +9,8 @@
       "Bash(git branch:*)",
       "Bash(winget install:*)",
       "Bash(git push:*)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" --version)"
     ]
   }
 }
