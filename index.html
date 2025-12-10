@@ -432,7 +432,7 @@
                     float dist = length(center);
                     float alpha = exp(-dist * dist * 8.0); // Gaussian falloff
                     alpha *= vAlpha;
-                    gl_FragColor = vec4(vColor * 0.4, alpha * 0.04);
+                    gl_FragColor = vec4(vColor * 0.4, alpha * 0.02);
                 }
             `
         };
@@ -546,7 +546,7 @@
             // Bloom - very subtle
             const bloomPass = new UnrealBloomPass(
                 new THREE.Vector2(window.innerWidth, window.innerHeight),
-                0.08,  // strength - minimal
+                0.04,  // strength - 50% reduced
                 0.15,  // radius
                 0.97   // threshold - very high = minimal bloom
             );
@@ -755,7 +755,7 @@
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
-                opacity: 0.1,
+                opacity: 0.05,
                 blending: THREE.AdditiveBlending
             });
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -766,7 +766,7 @@
             const outerGlowMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0044,
                 transparent: true,
-                opacity: 0.03,
+                opacity: 0.015,
                 blending: THREE.AdditiveBlending
             });
             const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
@@ -899,7 +899,7 @@
             const glowMaterial = new THREE.MeshBasicMaterial({
                 color: color,
                 transparent: true,
-                opacity: 0.06,
+                opacity: 0.03,
                 blending: THREE.AdditiveBlending
             });
             const glow = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -972,7 +972,7 @@
                         float dist = length(center);
                         float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
                         alpha = pow(alpha, 1.5);
-                        gl_FragColor = vec4(vColor * 0.5, alpha * 0.2);
+                        gl_FragColor = vec4(vColor * 0.5, alpha * 0.1);
                     }
                 `,
                 transparent: true,
