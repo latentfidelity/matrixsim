@@ -546,7 +546,6 @@
             createEntities();
             createLatentParticles();
             createDataStreams();
-            createBinaryParticles();
             createGridFloor();
 
             // Lighting
@@ -1067,112 +1066,6 @@
             scene.add(dataStreams);
         }
 
-        let binaryParticles;
-
-        function createBinaryTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64;
-            canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = 'black';
-            ctx.font = 'bold 48px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(Math.random() > 0.5 ? '0' : '1', 32, 32);
-
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.needsUpdate = true;
-            return texture;
-        }
-
-        function createBinaryParticles() {
-            const count = 150;
-            const binaryGroup = new THREE.Group();
-            const binaryData = [];
-
-            // Create shared textures for 0 and 1
-            const tex0 = createBinaryTextureChar('0');
-            const tex1 = createBinaryTextureChar('1');
-
-            for (let i = 0; i < count; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const radius = 1.5 + Math.random() * 6;
-                const y = (Math.random() - 0.5) * 3;
-
-                const material = new THREE.SpriteMaterial({
-                    map: Math.random() > 0.5 ? tex0 : tex1,
-                    color: 0x222222,
-                    transparent: true,
-                    opacity: 0.8 + Math.random() * 0.2,
-                    depthWrite: false,
-                    blending: THREE.AdditiveBlending
-                });
-
-                const sprite = new THREE.Sprite(material);
-                const scale = 0.2 + Math.random() * 0.2;
-                sprite.scale.set(scale, scale, 1);
-                sprite.position.set(
-                    Math.cos(angle) * radius,
-                    y,
-                    Math.sin(angle) * radius
-                );
-
-                binaryData.push({
-                    sprite: sprite,
-                    angle: angle,
-                    radius: radius,
-                    y: y,
-                    speed: 0.02 + Math.random() * 0.04,
-                    ySpeed: (Math.random() - 0.5) * 0.01,
-                    yBase: y
-                });
-
-                binaryGroup.add(sprite);
-            }
-
-            binaryParticles = { group: binaryGroup, data: binaryData };
-            scene.add(binaryGroup);
-        }
-
-        function createBinaryTextureChar(char) {
-            const size = 64;
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-
-            // Clear to transparent
-            ctx.clearRect(0, 0, size, size);
-
-            // Draw white/light gray text for additive blending
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${size * 0.85}px "Consolas", "Monaco", monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(char, size / 2, size / 2 + 2);
-
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.needsUpdate = true;
-            return texture;
-        }
-
-        function updateBinaryParticles(delta) {
-            if (!binaryParticles) return;
-
-            binaryParticles.data.forEach(b => {
-                b.angle += b.speed * delta;
-                b.y = b.yBase + Math.sin(time * 0.5 + b.angle) * 0.3;
-
-                b.sprite.position.set(
-                    Math.cos(b.angle) * b.radius,
-                    b.y,
-                    Math.sin(b.angle) * b.radius
-                );
-            });
-        }
-
         function createGridFloor() {
             const gridGroup = new THREE.Group();
 
@@ -1618,7 +1511,6 @@
             // Throttle particle updates to every 2nd frame
             if (frameNumber % 2 === 0) {
                 updateParticles(delta * 2);
-                updateBinaryParticles(delta * 2);
             }
             updateConnections();
             updateMatrixCore();
